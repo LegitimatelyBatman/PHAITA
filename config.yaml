@@ -1,0 +1,22 @@
+model:
+  deberta_model: "microsoft/deberta-base"
+  mistral_model: "mistralai/Mistral-7B-Instruct-v0.1"
+  gnn_hidden_dim: 128
+  gnn_num_layers: 3
+  use_quantization: true
+
+training:
+  num_epochs: 100
+  batch_size: 16
+  generator_lr: 2.0e-5
+  discriminator_lr: 1.0e-4
+  diversity_weight: 0.1
+  eval_interval: 10
+  save_interval: 50
+  device: null  # auto-detect
+
+data:
+  num_respiratory_conditions: 10
+  min_symptoms_per_condition: 3
+  max_symptoms_per_condition: 7
+  num_complaint_variants: 3
