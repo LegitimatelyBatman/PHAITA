@@ -1,154 +1,152 @@
 [
   {
-    "condition_code": "J93.9",
-    "condition_name": "Pneumothorax",
+    "condition_code": "J06.9",
+    "condition_name": "Upper Respiratory Infection",
     "symptoms": [
-      "chest tightness",
-      "rapid heart rate",
-      "sudden chest pain",
-      "severe chest pain"
+      "mild_fever",
+      "sneezing",
+      "nasal_congestion",
+      "persistent_high_fever",
+      "severe_throat_pain"
     ],
     "lay_terms_used": [
-      "chest feels weird",
-      "lung collapsed"
+      "stuffy nose",
+      "feel like I have a cold"
     ],
-    "patient_complaint": "I've been chest feels weird and lung collapsed."
+    "patient_complaint": "I've been stuffy nose and feel like I have a cold."
   },
   {
-    "condition_code": "J20.9",
-    "condition_name": "Acute Bronchitis",
+    "condition_code": "J44.1",
+    "condition_name": "COPD with Exacerbation",
     "symptoms": [
-      "persistent cough",
-      "sputum production",
-      "fatigue"
+      "mucus_production",
+      "difficulty_breathing",
+      "chest_tightness",
+      "confusion"
     ],
     "lay_terms_used": [
-      "can't stop coughing",
-      "chest hurts from coughing"
+      "can't do my normal activities",
+      "chest feels heavy"
     ],
-    "patient_complaint": "I've been can't stop coughing and chest hurts from coughing."
+    "patient_complaint": "I've been can't do my normal activities and chest feels heavy."
   },
   {
-    "condition_code": "J42",
-    "condition_name": "Chronic Bronchitis",
+    "condition_code": "Z87.891",
+    "condition_name": "Personal History of Nicotine Dependence",
     "symptoms": [
-      "frequent respiratory infections",
-      "shortness of breath",
-      "chronic productive cough",
-      "respiratory failure"
+      "increased_mucus_production",
+      "reduced_exercise_tolerance",
+      "chronic_cough"
     ],
     "lay_terms_used": [
-      "always short of breath",
-      "smoker's cough"
+      "clearing throat a lot",
+      "get winded easily"
     ],
-    "patient_complaint": "I've been always short of breath and smoker's cough."
-  },
-  {
-    "condition_code": "J81.0",
-    "condition_name": "Pulmonary Edema",
-    "symptoms": [
-      "anxiety",
-      "chest pressure",
-      "orthopnea",
-      "hemoptysis"
-    ],
-    "lay_terms_used": [
-      "suffocating",
-      "pink foam"
-    ],
-    "patient_complaint": "I've been suffocating and pink foam."
-  },
-  {
-    "condition_code": "J93.9",
-    "condition_name": "Pneumothorax",
-    "symptoms": [
-      "dry cough",
-      "chest tightness",
-      "sudden chest pain",
-      "severe chest pain"
-    ],
-    "lay_terms_used": [
-      "stabbing pain",
-      "lung collapsed"
-    ],
-    "patient_complaint": "I've been stabbing pain and lung collapsed."
-  },
-  {
-    "condition_code": "J20.9",
-    "condition_name": "Acute Bronchitis",
-    "symptoms": [
-      "fatigue",
-      "sputum production",
-      "persistent cough",
-      "severe cough"
-    ],
-    "lay_terms_used": [
-      "chest cold",
-      "chest hurts from coughing"
-    ],
-    "patient_complaint": "I've been chest cold and chest hurts from coughing."
-  },
-  {
-    "condition_code": "J42",
-    "condition_name": "Chronic Bronchitis",
-    "symptoms": [
-      "chest tightness",
-      "frequent respiratory infections",
-      "shortness of breath",
-      "severe dyspnea",
-      "cor pulmonale",
-      "respiratory failure"
-    ],
-    "lay_terms_used": [
-      "always short of breath",
-      "constant cough"
-    ],
-    "patient_complaint": "I've been always short of breath and constant cough."
-  },
-  {
-    "condition_code": "R06.02",
-    "condition_name": "Shortness of Breath",
-    "symptoms": [
-      "chest discomfort",
-      "labored breathing",
-      "air hunger"
-    ],
-    "lay_terms_used": [
-      "breathing hard",
-      "gasping"
-    ],
-    "patient_complaint": "I've been breathing hard and gasping."
-  },
-  {
-    "condition_code": "J93.9",
-    "condition_name": "Pneumothorax",
-    "symptoms": [
-      "sudden chest pain",
-      "shortness of breath",
-      "dry cough",
-      "severe dyspnea",
-      "hypotension",
-      "respiratory distress"
-    ],
-    "lay_terms_used": [
-      "lung collapsed",
-      "stabbing pain"
-    ],
-    "patient_complaint": "I've been lung collapsed and stabbing pain."
+    "patient_complaint": "I've been clearing throat a lot and get winded easily."
   },
   {
     "condition_code": "J06.9",
     "condition_name": "Upper Respiratory Infection",
     "symptoms": [
-      "nasal congestion",
-      "cough",
-      "low-grade fever",
-      "severe throat pain"
+      "runny_nose",
+      "headache",
+      "sneezing"
     ],
     "lay_terms_used": [
-      "runny nose",
-      "head cold"
+      "feel like I have a cold",
+      "keep sneezing"
     ],
-    "patient_complaint": "I've been runny nose and head cold."
+    "patient_complaint": "I've been feel like I have a cold and keep sneezing."
+  },
+  {
+    "condition_code": "J45.9",
+    "condition_name": "Asthma",
+    "symptoms": [
+      "cough",
+      "difficulty_breathing",
+      "chest_tightness",
+      "peak_flow_decreased",
+      "nighttime_awakening"
+    ],
+    "lay_terms_used": [
+      "can't breathe",
+      "chest feels tight"
+    ],
+    "patient_complaint": "I've been can't breathe and chest feels tight."
+  },
+  {
+    "condition_code": "Z87.891",
+    "condition_name": "Personal History of Nicotine Dependence",
+    "symptoms": [
+      "chronic_cough",
+      "reduced_exercise_tolerance",
+      "mild_shortness_of_breath",
+      "weight_loss"
+    ],
+    "lay_terms_used": [
+      "can't keep up anymore",
+      "coughing in the morning"
+    ],
+    "patient_complaint": "I've been can't keep up anymore and coughing in the morning."
+  },
+  {
+    "condition_code": "J44.1",
+    "condition_name": "COPD with Exacerbation",
+    "symptoms": [
+      "chest_tightness",
+      "chronic_cough",
+      "wheezing",
+      "confusion"
+    ],
+    "lay_terms_used": [
+      "more phlegm",
+      "chest feels heavy"
+    ],
+    "patient_complaint": "I've been more phlegm and chest feels heavy."
+  },
+  {
+    "condition_code": "J18.9",
+    "condition_name": "Pneumonia",
+    "symptoms": [
+      "fever",
+      "shortness_of_breath",
+      "chills"
+    ],
+    "lay_terms_used": [
+      "really tired",
+      "feel feverish"
+    ],
+    "patient_complaint": "I've been really tired and feel feverish."
+  },
+  {
+    "condition_code": "Z87.891",
+    "condition_name": "Personal History of Nicotine Dependence",
+    "symptoms": [
+      "reduced_exercise_tolerance",
+      "chronic_cough",
+      "frequent_clearing_throat",
+      "weight_loss",
+      "recurrent_infections"
+    ],
+    "lay_terms_used": [
+      "clearing throat a lot",
+      "can't keep up anymore"
+    ],
+    "patient_complaint": "I've been clearing throat a lot and can't keep up anymore."
+  },
+  {
+    "condition_code": "J81.0",
+    "condition_name": "Pulmonary Edema",
+    "symptoms": [
+      "cold_clammy_skin",
+      "wheezing",
+      "severe_shortness_of_breath",
+      "cyanosis"
+    ],
+    "lay_terms_used": [
+      "drowning feeling",
+      "can't breathe lying down"
+    ],
+    "patient_complaint": "I've been drowning feeling and can't breathe lying down."
   }
 ]
