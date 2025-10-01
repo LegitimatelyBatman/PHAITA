@@ -1,11 +1,28 @@
 """
 Symptom and complaint generators using Bayesian networks and language models.
+Supports both LLM-based generation (Mistral-7B) and template-based fallback.
 """
 
 import random
+import torch
+import torch.nn as nn
 from typing import List, Optional, Dict
 from .bayesian_network import BayesianSymptomNetwork
 from ..data.icd_conditions import RespiratoryConditions
+
+try:
+    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    print("Warning: transformers not available for generator.")
+
+try:
+    import bitsandbytes
+    BITSANDBYTES_AVAILABLE = True
+except ImportError:
+    BITSANDBYTES_AVAILABLE = False
+    print("Warning: bitsandbytes not available. 4-bit quantization disabled.")
 
 
 class SymptomGenerator:
@@ -35,14 +52,105 @@ class SymptomGenerator:
         return self.bayesian_network.sample_symptoms(condition_code, num_symptoms)
 
 
-class ComplaintGenerator:
+class ComplaintGenerator(nn.Module):
     """
     Generates natural language patient complaints from symptoms.
-    Uses template-based generation to simulate language model output.
+    Uses Mistral-7B-Instruct with 4-bit quantization when available,
+    falls back to template-based generation otherwise.
     """
     
-    def __init__(self):
-        """Initialize complaint generator."""
+    def __init__(
+        self,
+        model_name: str = "mistralai/Mistral-7B-Instruct-v0.2",
+        use_pretrained: bool = True,
+        use_4bit: bool = True,
+        max_new_tokens: int = 150,
+        temperature: float = 0.8,
+        top_p: float = 0.9,
+        device: Optional[str] = None
+    ):
+        """
+        Initialize complaint generator.
+        
+        Args:
+            model_name: Name of the LLM to use
+            use_pretrained: Whether to load pretrained LLM
+            use_4bit: Whether to use 4-bit quantization
+            max_new_tokens: Maximum tokens to generate
+            temperature: Sampling temperature for diversity
+            top_p: Top-p sampling parameter
+            device: Device to load model on
+        """
+        super().__init__()
+        
+        self.conditions = RespiratoryConditions.get_all_conditions()
+        self.use_llm = use_pretrained and TRANSFORMERS_AVAILABLE
+        self.max_new_tokens = max_new_tokens
+        self.temperature = temperature
+        self.top_p = top_p
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Try to load LLM
+        if self.use_llm:
+            try:
+                self._load_llm(model_name, use_4bit)
+            except Exception as e:
+                print(f"Warning: Could not load LLM: {e}")
+                print("Falling back to template-based generation")
+                self.use_llm = False
+                self._init_template_generator()
+        else:
+            self._init_template_generator()
+    
+    def _load_llm(self, model_name: str, use_4bit: bool):
+        """Load the language model."""
+        print(f"Loading {model_name}...")
+        
+        if use_4bit and BITSANDBYTES_AVAILABLE and torch.cuda.is_available():
+            # 4-bit quantization for memory efficiency
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4"
+            )
+            
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                quantization_config=quantization_config,
+                device_map="auto",
+                trust_remote_code=True
+            )
+        else:
+            # Load without quantization
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                device_map="auto" if torch.cuda.is_available() else None,
+                trust_remote_code=True
+            )
+        
+        # Set padding token
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        
+        self.model.eval()
+        print(f"✓ Loaded {model_name} successfully")
+    
+    def _init_template_generator(self):
+        """Initialize template-based fallback generator."""
+        self.model = None
+        self.tokenizer = None
+        
+        # Add a learnable embedding for template selection (for optimizer compatibility)
+        self.template_embeddings = nn.Parameter(torch.randn(8, 64))  # 8 templates
+        
+        # Templates for generating complaints with proper grammar
+        # Use {symptoms_experiencing} for "experiencing X" form
+        # Use {main_symptom_gerund} for gerund form (e.g., "wheezing")
+        # Use {main_symptom_phrase} for phrase form (e.g., "trouble breathing")
         self.conditions = RespiratoryConditions.get_all_conditions()
         
         # Templates for generating complaints with proper grammar
@@ -165,80 +273,107 @@ class ComplaintGenerator:
             }
         }
     
-    def _get_symptom_form(self, symptom: str, form: str) -> str:
+    def _create_prompt(
+        self,
+        symptoms: List[str],
+        condition_code: str
+    ) -> str:
         """
-        Get the grammatically correct form of a symptom.
+        Create a prompt for the LLM to generate a patient complaint.
         
         Args:
-            symptom: Raw symptom string (e.g., "wheezing", "shortness_of_breath")
-            form: Desired grammatical form ("gerund", "noun", "phrase", "action")
+            symptoms: List of medical symptoms
+            condition_code: ICD-10 condition code
             
         Returns:
-            Grammatically correct symptom form
+            Formatted prompt string
         """
-        # Normalize symptom
-        symptom_key = symptom.lower().replace(' ', '_')
+        condition_data = self.conditions.get(condition_code, {})
+        condition_name = condition_data.get("name", "respiratory condition")
         
-        # Also try with spaces for lay terms
-        symptom_key_spaced = symptom.lower()
+        # Format symptoms as natural language
+        symptom_list = ", ".join(s.replace("_", " ") for s in symptoms[:5])
         
-        # Check if we have grammar rules for this symptom
-        if symptom_key in self.symptom_grammar_rules:
-            return self.symptom_grammar_rules[symptom_key].get(form, symptom.replace('_', ' '))
-        if symptom_key_spaced in self.symptom_grammar_rules:
-            return self.symptom_grammar_rules[symptom_key_spaced].get(form, symptom)
+        prompt = f"""[INST] You are helping generate realistic patient complaints for medical triage training.
+
+Patient has {condition_name} with symptoms: {symptom_list}
+
+Generate a natural, realistic patient complaint as if the patient is describing their symptoms to a doctor. Keep it:
+- Brief (1-3 sentences)
+- In first person
+- Using everyday language (not medical jargon)
+- Expressing concern or discomfort
+- Natural and conversational
+
+Patient complaint: [/INST]"""
         
-        # Fallback: apply default grammar rules
-        symptom_clean = symptom.replace('_', ' ')
-        
-        if form == "gerund":
-            # Check if it's already a gerund (ends in -ing)
-            if symptom_clean.endswith('ing'):
-                return symptom_clean
-            # Check if it starts with "can't" - convert to proper form
-            if symptom_clean.startswith("can't"):
-                base = symptom_clean.replace("can't ", "")
-                return f"having trouble {base}"
-            # For phrases with "of", prepend "having"
-            if ' of ' in symptom_clean or symptom_clean.startswith('difficulty'):
-                return f"having {symptom_clean}"
-            # For most symptoms, add "experiencing"
-            return f"experiencing {symptom_clean}"
-        elif form == "noun":
-            # Handle "can't X" phrases
-            if symptom_clean.startswith("can't"):
-                return "breathing difficulty"
-            # Remove trailing -ing if present and convert to noun form
-            if symptom_clean.endswith('ing'):
-                return symptom_clean  # Keep as-is (e.g., "wheezing" is both verb and noun)
-            # Handle adjectives
-            if symptom_clean in ['breathless', 'wheezy', 'dizzy']:
-                return symptom_clean + 'ness'
-            return symptom_clean
-        elif form == "phrase":
-            # Handle "can't X" phrases
-            if symptom_clean.startswith("can't"):
-                base = symptom_clean.replace("can't ", "")
-                return f"trouble {base if base else 'breathing'}"
-            return symptom_clean
-        elif form == "action":
-            # Create action phrase (e.g., "can't stop X" or "have X")
-            if symptom_clean.startswith("can't"):
-                return symptom_clean  # Already an action
-            if symptom_clean.endswith('ing'):
-                return f"can't stop {symptom_clean}"
-            return f"have {symptom_clean}"
-        
-        return symptom_clean
+        return prompt
     
-    def generate_complaint(
+    def _generate_with_llm(
+        self,
+        symptoms: List[str],
+        condition_code: str
+    ) -> str:
+        """
+        Generate complaint using LLM.
+        
+        Args:
+            symptoms: List of medical symptoms
+            condition_code: ICD-10 condition code
+            
+        Returns:
+            Generated complaint string
+        """
+        if not self.use_llm or self.model is None:
+            return self._generate_with_template(symptoms, condition_code)
+        
+        try:
+            prompt = self._create_prompt(symptoms, condition_code)
+            
+            inputs = self.tokenizer(
+                prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512
+            ).to(self.model.device)
+            
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=self.max_new_tokens,
+                    temperature=self.temperature,
+                    top_p=self.top_p,
+                    do_sample=True,
+                    pad_token_id=self.tokenizer.eos_token_id
+                )
+            
+            # Decode and extract the response
+            generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            
+            # Extract the complaint (after the prompt)
+            if "[/INST]" in generated_text:
+                complaint = generated_text.split("[/INST]")[-1].strip()
+            else:
+                complaint = generated_text[len(prompt):].strip()
+            
+            # Clean up the complaint
+            complaint = complaint.split('\n')[0]  # Take first line
+            complaint = complaint[:500]  # Limit length
+            
+            return complaint if complaint else self._generate_with_template(symptoms, condition_code)
+        
+        except Exception as e:
+            print(f"Warning: LLM generation failed: {e}")
+            return self._generate_with_template(symptoms, condition_code)
+    
+    def _generate_with_template(
         self,
         symptoms: List[str],
         condition_code: str,
         use_lay_terms: bool = True
     ) -> str:
         """
-        Generate a natural language patient complaint.
+        Generate complaint using templates (fallback method).
         
         Args:
             symptoms: List of medical symptoms
@@ -246,7 +381,7 @@ class ComplaintGenerator:
             use_lay_terms: Whether to use lay language
             
         Returns:
-            Natural language complaint string
+            Generated complaint string
         """
         if not symptoms:
             return "I'm not feeling well."
@@ -321,6 +456,95 @@ class ComplaintGenerator:
         
         return complaint
     
+    def _get_symptom_form(self, symptom: str, form: str) -> str:
+        """
+        Get the grammatically correct form of a symptom.
+        
+        Args:
+            symptom: Raw symptom string (e.g., "wheezing", "shortness_of_breath")
+            form: Desired grammatical form ("gerund", "noun", "phrase", "action")
+            
+        Returns:
+            Grammatically correct symptom form
+        """
+        # Normalize symptom
+        symptom_key = symptom.lower().replace(' ', '_')
+        
+        # Also try with spaces for lay terms
+        symptom_key_spaced = symptom.lower()
+        
+        # Check if we have grammar rules for this symptom
+        if symptom_key in self.symptom_grammar_rules:
+            return self.symptom_grammar_rules[symptom_key].get(form, symptom.replace('_', ' '))
+        if symptom_key_spaced in self.symptom_grammar_rules:
+            return self.symptom_grammar_rules[symptom_key_spaced].get(form, symptom)
+        
+        # Fallback: apply default grammar rules
+        symptom_clean = symptom.replace('_', ' ')
+        
+        if form == "gerund":
+            # Check if it's already a gerund (ends in -ing)
+            if symptom_clean.endswith('ing'):
+                return symptom_clean
+            # Check if it starts with "can't" - convert to proper form
+            if symptom_clean.startswith("can't"):
+                base = symptom_clean.replace("can't ", "")
+                return f"having trouble {base}"
+            # For phrases with "of", prepend "having"
+            if ' of ' in symptom_clean or symptom_clean.startswith('difficulty'):
+                return f"having {symptom_clean}"
+            # For most symptoms, add "experiencing"
+            return f"experiencing {symptom_clean}"
+        elif form == "noun":
+            # Handle "can't X" phrases
+            if symptom_clean.startswith("can't"):
+                return "breathing difficulty"
+            # Remove trailing -ing if present and convert to noun form
+            if symptom_clean.endswith('ing'):
+                return symptom_clean  # Keep as-is (e.g., "wheezing" is both verb and noun)
+            # Handle adjectives
+            if symptom_clean in ['breathless', 'wheezy', 'dizzy']:
+                return symptom_clean + 'ness'
+            return symptom_clean
+        elif form == "phrase":
+            # Handle "can't X" phrases
+            if symptom_clean.startswith("can't"):
+                base = symptom_clean.replace("can't ", "")
+                return f"trouble {base if base else 'breathing'}"
+            return symptom_clean
+        elif form == "action":
+            # Create action phrase (e.g., "can't stop X" or "have X")
+            if symptom_clean.startswith("can't"):
+                return symptom_clean  # Already an action
+            if symptom_clean.endswith('ing'):
+                return f"can't stop {symptom_clean}"
+            return f"have {symptom_clean}"
+        
+        return symptom_clean
+    
+    def generate_complaint(
+        self,
+        symptoms: List[str],
+        condition_code: str,
+        use_lay_terms: bool = True
+    ) -> str:
+        """
+        Generate a natural language patient complaint.
+        Uses LLM if available, otherwise falls back to templates.
+        
+        Args:
+            symptoms: List of medical symptoms
+            condition_code: ICD-10 condition code
+            use_lay_terms: Whether to use lay language (for template mode)
+            
+        Returns:
+            Natural language complaint string
+        """
+        if self.use_llm:
+            return self._generate_with_llm(symptoms, condition_code)
+        else:
+            return self._generate_with_template(symptoms, condition_code, use_lay_terms)
+    
     def generate_multiple_complaints(
         self,
         condition_code: str,
@@ -345,3 +569,33 @@ class ComplaintGenerator:
             complaints.append(complaint)
         
         return complaints
+    
+    def forward(
+        self,
+        symptoms_batch: List[List[str]],
+        condition_codes: List[str]
+    ) -> List[str]:
+        """
+        PyTorch-compatible forward pass for batch generation.
+        
+        Args:
+            symptoms_batch: List of symptom lists
+            condition_codes: List of condition codes
+            
+        Returns:
+            List of generated complaints
+        """
+        complaints = []
+        for symptoms, code in zip(symptoms_batch, condition_codes):
+            complaint = self.generate_complaint(symptoms, code)
+            complaints.append(complaint)
+        return complaints
+    
+    def __call__(self, *args, **kwargs):
+        """Make the generator callable."""
+        if len(args) == 2 and isinstance(args[0], list):
+            # Called with (symptoms, condition_code)
+            return self.generate_complaint(*args, **kwargs)
+        else:
+            # Called as forward
+            return self.forward(*args, **kwargs)
