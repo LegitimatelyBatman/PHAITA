@@ -144,7 +144,7 @@ class AdversarialTrainer:
         
         # Initialize optimizers
         self.gen_optimizer = AdamW(
-            self.discriminator.parameters(),  # Only text encoder is trainable
+            self.generator.parameters(),  # Only text encoder is trainable
             lr=generator_lr,
             weight_decay=0.01
         )
