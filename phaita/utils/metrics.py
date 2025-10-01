@@ -52,13 +52,25 @@ def compute_diagnosis_metrics(true_labels: List[str], predicted_labels: List[str
     # Confusion matrix statistics
     cm = confusion_matrix(true_labels, predicted_labels)
     if len(cm) > 1:
-        # Calculate per-class accuracies
-        class_accuracies = cm.diagonal() / cm.sum(axis=1)
-        metrics['min_class_accuracy'] = np.min(class_accuracies)
-        metrics['max_class_accuracy'] = np.max(class_accuracies)
-        metrics['std_class_accuracy'] = np.std(class_accuracies)
-    
+        # Calculate per-class accuracies while guarding against zero-row divisions
+        row_sums = cm.sum(axis=1)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            class_accuracies = np.divide(
+                cm.diagonal(),
+                row_sums,
+                out=np.zeros_like(row_sums, dtype=float),
+                where=row_sums != 0
+            )
+
+        valid_mask = row_sums != 0
+        if np.any(valid_mask):
+            valid_accuracies = class_accuracies[valid_mask]
+            metrics['min_class_accuracy'] = np.min(valid_accuracies)
+            metrics['max_class_accuracy'] = np.max(valid_accuracies)
+            metrics['std_class_accuracy'] = np.std(valid_accuracies)
+
     return metrics
+
 
 
 def compute_diversity_metrics(texts: List[str]) -> Dict[str, float]:

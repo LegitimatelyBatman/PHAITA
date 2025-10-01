@@ -2,7 +2,7 @@
 
 **Pre-Hospital AI Triage Algorithm**
 
-PHAITA is a research prototype for medical triage that pits a language-model complaint generator against a diagnosis discriminator. The system explores how synthetic data, adversarial training, and medical knowledge graphs can improve robustness without using real patient data.
+PHAITA is a research prototype for medical triage that pits a language-model complaint generator against a diagnosis discriminator. The system explores how synthetic data, adversarial training, and medical knowledge graphs can improve robustness without using real patient data. The flagship deliverable is an Akinator-style conversational assistant that interviews patients, asks clarifying questions, and ultimately surfaces ten differential diagnoses with probabilities, red-flag warnings, and escalation guidance.
 
 ## Overview
 - **Scope**: Ten respiratory conditions (ICD-10) with lay-language support.
@@ -77,7 +77,7 @@ test_*.py              Unit and integration tests
 - **IMPLEMENTATION_SUMMARY.md** – High-level tour of major modules.
 - **IMPLEMENTATION_DETAILS.md** – Deep-learning upgrade highlights and references.
 - **DEEP_LEARNING_GUIDE.md** – Practical guidance for enabling the full model stack.
-- **FIXES_SUMMARY.md / TRANSFORMATION_SUMMARY.txt** – Historical change logs.
+- **CHANGE_HISTORY.md** – Consolidated audit notes, historical fixes, and outstanding work.
 
 ## License & Disclaimer
 PHAITA is released under the MIT License. The project is for research and educational purposes only and must not be used for real-world medical decision making without regulatory approval.

@@ -6,6 +6,9 @@ Emergency clinicians must triage patients quickly, yet labelled datasets capturi
 ## Solution
 PHAITA explores adversarial training for triage. A complaint generator creates human-like narratives for specific ICD-10 respiratory conditions while a diagnosis discriminator attempts to classify the condition and detect synthetic text. Iterating between both systems exposes weaknesses and drives robustness without ever touching real patient data.
 
+## Target Experience
+The end-user experience is an Akinator-style triage conversation. Patients describe their concerns, the system probes with clarifying questions, and once enough evidence is gathered it presents ten differential diagnoses with probability estimates, highlights red-flag symptoms, and advises whether to escalate to emergency services or follow up with a family physician.
+
 ## System Overview
 - **Generator stack**: Bayesian symptom sampler, optional Mistral 7B complaint generation, template fallback for offline use.
 - **Discriminator stack**: DeBERTa encoder fused with a symptom knowledge graph via Graph Neural Network layers.
