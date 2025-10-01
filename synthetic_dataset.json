@@ -1,151 +1,156 @@
 [
   {
-    "condition_code": "J15.9",
-    "condition_name": "Bacterial pneumonia",
+    "condition_code": "J44.9",
+    "condition_name": "COPD",
     "symptoms": [
-      "chills",
-      "fever",
-      "productive_cough"
+      "chest_tightness",
+      "wheezing",
+      "chronic_cough",
+      "severe_breathlessness",
+      "cyanosis"
     ],
     "lay_terms_used": [
-      "can't breathe right",
-      "lung infection"
+      "out of breath",
+      "bringing up phlegm"
     ],
-    "patient_complaint": "I've been can't breathe right and lung infection."
+    "patient_complaint": "I've been out of breath and bringing up phlegm."
+  },
+  {
+    "condition_code": "J20.9",
+    "condition_name": "Acute bronchitis",
+    "symptoms": [
+      "cough",
+      "chest_discomfort",
+      "mild_dyspnea",
+      "blood_in_sputum",
+      "fever",
+      "severe_chest_pain"
+    ],
+    "lay_terms_used": [
+      "coughing up mucus",
+      "chest feels heavy"
+    ],
+    "patient_complaint": "I've been coughing up mucus and chest feels heavy."
   },
   {
     "condition_code": "J12.9",
     "condition_name": "Viral pneumonia",
     "symptoms": [
-      "headache",
+      "dyspnea",
       "fever",
-      "dry_cough",
-      "high_fever"
+      "myalgia",
+      "high_fever",
+      "rapid_breathing"
     ],
     "lay_terms_used": [
-      "aching all over",
-      "viral lung infection"
+      "viral lung infection",
+      "can't breathe well"
     ],
-    "patient_complaint": "I've been aching all over and viral lung infection."
+    "patient_complaint": "I've been viral lung infection and can't breathe well."
+  },
+  {
+    "condition_code": "J45.9",
+    "condition_name": "Asthma",
+    "symptoms": [
+      "difficulty_breathing",
+      "wheezing",
+      "cough",
+      "cyanosis"
+    ],
+    "lay_terms_used": [
+      "wheezy",
+      "tight chest"
+    ],
+    "patient_complaint": "I've been wheezy and tight chest."
   },
   {
     "condition_code": "J21.9",
     "condition_name": "Acute bronchiolitis",
     "symptoms": [
-      "retractions",
+      "dyspnea",
       "tachypnea",
-      "cough"
+      "cough",
+      "severe_respiratory_distress",
+      "cyanosis"
     ],
     "lay_terms_used": [
-      "wheezing badly",
-      "working hard to breathe"
+      "breathing really fast",
+      "baby can't breathe"
     ],
-    "patient_complaint": "I've been wheezing badly and working hard to breathe."
+    "patient_complaint": "I've been breathing really fast and baby can't breathe."
   },
   {
     "condition_code": "J18.9",
     "condition_name": "Pneumonia",
     "symptoms": [
+      "fever",
       "cough",
-      "fatigue",
-      "productive_cough",
-      "high_fever",
+      "dyspnea",
       "rapid_breathing"
     ],
     "lay_terms_used": [
-      "lung infection",
-      "really tired"
+      "chest hurts",
+      "coughing up stuff"
     ],
-    "patient_complaint": "I've been lung infection and really tired."
+    "patient_complaint": "I've been chest hurts and coughing up stuff."
   },
   {
-    "condition_code": "J44.9",
-    "condition_name": "COPD",
+    "condition_code": "J20.9",
+    "condition_name": "Acute bronchitis",
     "symptoms": [
-      "sputum_production",
       "wheezing",
-      "chest_tightness"
+      "chest_discomfort",
+      "cough",
+      "persistent_cough"
     ],
     "lay_terms_used": [
-      "can't breathe",
-      "chest feels tight"
+      "coughing up mucus",
+      "can't stop coughing"
     ],
-    "patient_complaint": "I've been can't breathe and chest feels tight."
+    "patient_complaint": "I've been coughing up mucus and can't stop coughing."
   },
   {
-    "condition_code": "J15.9",
-    "condition_name": "Bacterial pneumonia",
+    "condition_code": "J20.9",
+    "condition_name": "Acute bronchitis",
     "symptoms": [
-      "productive_cough",
+      "mild_dyspnea",
+      "sputum_production",
+      "wheezing",
       "fever",
-      "dyspnea",
-      "confusion",
       "severe_chest_pain"
     ],
     "lay_terms_used": [
-      "coughing up colored mucus",
-      "really sick"
+      "chest feels heavy",
+      "can't stop coughing"
     ],
-    "patient_complaint": "I've been coughing up colored mucus and really sick."
+    "patient_complaint": "I've been chest feels heavy and can't stop coughing."
   },
   {
     "condition_code": "J21.9",
     "condition_name": "Acute bronchiolitis",
     "symptoms": [
+      "nasal_flaring",
       "dyspnea",
-      "tachypnea",
-      "wheezing",
-      "severe_respiratory_distress"
+      "retractions"
     ],
     "lay_terms_used": [
       "chest pulling in",
-      "breathing really fast"
+      "baby can't breathe"
     ],
-    "patient_complaint": "I've been chest pulling in and breathing really fast."
+    "patient_complaint": "I've been chest pulling in and baby can't breathe."
   },
   {
-    "condition_code": "J06.9",
-    "condition_name": "Upper respiratory infection",
+    "condition_code": "J81.0",
+    "condition_name": "Acute pulmonary edema",
     "symptoms": [
-      "sneezing",
-      "sore_throat",
+      "orthopnea",
+      "anxiety",
       "cough"
     ],
     "lay_terms_used": [
-      "throat hurts",
-      "scratchy throat"
+      "fluid in lungs",
+      "drowning feeling"
     ],
-    "patient_complaint": "I've been throat hurts and scratchy throat."
-  },
-  {
-    "condition_code": "J44.9",
-    "condition_name": "COPD",
-    "symptoms": [
-      "chest_tightness",
-      "chronic_cough",
-      "dyspnea",
-      "cyanosis"
-    ],
-    "lay_terms_used": [
-      "bringing up phlegm",
-      "out of breath"
-    ],
-    "patient_complaint": "I've been bringing up phlegm and out of breath."
-  },
-  {
-    "condition_code": "J44.9",
-    "condition_name": "COPD",
-    "symptoms": [
-      "wheezing",
-      "sputum_production",
-      "chest_tightness",
-      "cyanosis",
-      "barrel_chest"
-    ],
-    "lay_terms_used": [
-      "out of breath",
-      "can't breathe"
-    ],
-    "patient_complaint": "I've been out of breath and can't breathe."
+    "patient_complaint": "I've been fluid in lungs and drowning feeling."
   }
 ]
