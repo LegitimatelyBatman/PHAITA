@@ -11,14 +11,14 @@ This document summarizes the implementation of the Medical Triage Training Syste
 - **10 Respiratory Conditions** with ICD-10 codes:
   - J45.9: Asthma
   - J18.9: Pneumonia  
-  - J44.1: COPD with Exacerbation
+  - J44.9: COPD
   - J06.9: Upper Respiratory Infection
-  - R06.02: Shortness of Breath
   - J20.9: Acute Bronchitis
-  - J42: Chronic Bronchitis
-  - J93.9: Pneumothorax
-  - J81.0: Pulmonary Edema
-  - Z87.891: Personal History of Nicotine Dependence
+  - J81.0: Acute Pulmonary Edema
+  - J93.0: Spontaneous Tension Pneumothorax
+  - J15.9: Bacterial Pneumonia
+  - J12.9: Viral Pneumonia
+  - J21.9: Acute Bronchiolitis
 
 - **Features**:
   - Primary symptoms for each condition
@@ -32,34 +32,23 @@ This document summarizes the implementation of the Medical Triage Training Syste
 - **Lay Language Mapper** with bidirectional mapping:
   - Medical → Lay (dyspnea → "can't breathe")
   - Lay → Medical ("can't breathe" → dyspnea)
-  - 7+ predefined medical term mappings
+  - 26+ predefined medical term mappings
   - Learning capability from forum posts
   - Save/load functionality
 - **Data Augmentation** with forum language integration
 - **ForumPost dataclass** for structured post data
 
-#### `synthetic_generator.py` - Synthetic Data Generation
-- **Variation Generator**: Creates 1000+ variations per condition
-- **Demographic Diversity**:
-  - Education levels (low, medium, high)
-  - Age groups (child, adult, elderly)
-  - Emotional states (neutral, anxious, panicked)
-- **Dataset Generation**:
-  - Balanced datasets
-  - Difficulty-based datasets (easy, medium, hard)
-  - Configurable sizes and distributions
+#### `synthetic_generator.py` - Synthetic Data Generation (Stub)
+- **Variation Generator**: Creates variations per condition
+- **Uses core components**: SymptomGenerator and ComplaintGenerator
+- **Lightweight wrapper** for generating multiple synthetic examples
+- Note: Core functionality distributed across generator.py and bayesian_network.py
 
-#### `preprocessing.py` - Data Pipeline
-- **Text Preprocessor**:
-  - Contraction expansion
-  - Lowercasing
-  - Tokenization
-  - Keyword extraction
-  - Stop word removal
-- **Dataset Preprocessor**:
-  - Train/val/test splitting
-  - Balanced (stratified) splitting
-  - Text and label extraction
+#### `preprocessing.py` - Data Pipeline (Stub)
+- **Basic text preprocessing**:
+  - Lowercasing and whitespace normalization
+  - Load/save dataset utilities
+- Note: Minimal implementation as preprocessing is handled by individual components
 
 ### 2. Model Layer (`phaita/models/`)
 
@@ -92,40 +81,30 @@ This document summarizes the implementation of the Medical Triage Training Syste
 #### `generator.py` - Symptom & Complaint Generator
 - **SymptomGenerator**: Uses Bayesian network for symptom sampling
 - **ComplaintGenerator**: Converts symptoms to patient language
-  - 26+ lay language mappings
-  - Multiple complaint templates (15+ variations)
-  - Duration templates ("for days", "for hours")
+  - Uses lay language from icd_conditions.py
+  - Multiple complaint templates (8+ variations)
+  - Duration templates ("for days", "for hours", "yesterday")
   - Emotional templates ("I'm worried", "I'm scared")
   - Combination templates (multiple symptoms)
-- **Language style variation**:
-  - Education level adaptation
-  - Age-appropriate language
-  - Emotional state modulation
+- **Template-based generation**: Simulates language model output
 
 #### `discriminator.py` - Diagnosis System
-- **Keyword-based diagnosis** (mock implementation)
-- **Multi-condition scoring**
-- **Confidence scores**
-- **Uncertainty quantification**
-- **PyTorch-compatible interface**
-- **Graceful fallback** (works without PyTorch)
+- **Keyword-based diagnosis** (mock implementation for testing)
+- **Multi-condition scoring** based on symptom and lay term matching
+- **Confidence scores** normalized to 0-1 range
+- **Batch prediction support**
+- **Evaluation metrics**: Accuracy and average confidence
+- Note: In production, this would use DeBERTa + GNN architecture
 
-#### `question_generator.py` - Interactive Triage
+#### `question_generator.py` - Interactive Triage (Stub)
 - **Template-based questions** for common symptoms:
-  - Cough questions (4 variations)
-  - Shortness of breath (4 variations)
-  - Chest pain (4 variations)
-  - Fever (4 variations)
-  - Wheezing (4 variations)
-- **Condition-specific follow-ups**:
-  - Asthma triggers, inhaler use
-  - Pneumonia contacts, mucus color
-  - COPD exacerbation signs
-  - Pneumothorax trauma history
-- **Severity assessment questions**
-- **Information gain calculation**
-- **Patient style matching** (education level)
-- **Conversation history tracking**
+  - Cough questions (3 variations)
+  - Shortness of breath (3 variations)
+  - Chest pain (3 variations)
+  - Fever (3 variations)
+- **Clarifying question generation** based on symptom list
+- **Follow-up question generation** for suspected conditions
+- Note: Lightweight stub implementation matching documentation examples
 
 ### 3. Training Infrastructure
 
