@@ -39,12 +39,20 @@ venv.bak/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Models and data
-models/
-data/
+# Model weights and large data files (not source code)
 *.pth
 *.bin
 *.safetensors
+*.h5
+*.pkl
+*.ckpt
+# Large data files
+/data/raw/
+/data/processed/
+/data/external/
+*.csv
+*.parquet
+*.feather
 
 # Logs
 logs/
