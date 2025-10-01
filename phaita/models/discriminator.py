@@ -1,31 +1,143 @@
 """
-Diagnosis discriminator using rule-based and keyword matching.
-In production, this would use DeBERTa + GNN, but this is a mock implementation.
+Diagnosis discriminator using DeBERTa encoder and Graph Neural Networks.
+Combines text features from patient complaints with symptom graph relationships.
 """
 
 import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from typing import List, Tuple, Dict, Optional
 from ..data.icd_conditions import RespiratoryConditions
 
+try:
+    from transformers import AutoTokenizer, AutoModel
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    print("Warning: transformers not available. Using fallback implementation.")
 
-class DiagnosisDiscriminator:
+try:
+    from .gnn_module import SymptomGraphModule
+    GNN_AVAILABLE = True
+except ImportError:
+    GNN_AVAILABLE = False
+    print("Warning: GNN module not available. Using fallback implementation.")
+
+
+class DiagnosisDiscriminator(nn.Module):
     """
     Discriminator for diagnosing conditions from patient complaints.
-    Mock implementation using keyword matching.
+    Uses DeBERTa for text encoding and GAT for symptom relationship modeling.
     """
     
-    def __init__(self):
-        """Initialize the discriminator."""
+    def __init__(
+        self,
+        model_name: str = "microsoft/deberta-v3-base",
+        use_pretrained: bool = True,
+        freeze_encoder: bool = False,
+        gnn_hidden_dim: int = 128,
+        gnn_output_dim: int = 256,
+        fusion_hidden_dim: int = 512,
+        dropout: float = 0.1
+    ):
+        """
+        Initialize the discriminator.
+        
+        Args:
+            model_name: Name of the DeBERTa model to use
+            use_pretrained: Whether to use pretrained weights
+            freeze_encoder: Whether to freeze the encoder weights
+            gnn_hidden_dim: Hidden dimension for GNN
+            gnn_output_dim: Output dimension for GNN
+            fusion_hidden_dim: Hidden dimension for fusion layer
+            dropout: Dropout rate
+        """
+        super().__init__()
+        
         self.conditions = RespiratoryConditions.get_all_conditions()
+        self.num_conditions = len(self.conditions)
+        self.condition_codes = list(self.conditions.keys())
+        self.use_pretrained = use_pretrained and TRANSFORMERS_AVAILABLE
+        
+        # Build keyword index for fallback
         self._build_keyword_index()
-        self.device = "cpu"  # Default device
-        # Create a dummy parameter for optimizer compatibility
-        self._dummy_param = nn.Parameter(torch.zeros(1, requires_grad=True))
+        
+        # Initialize text encoder (DeBERTa)
+        if self.use_pretrained:
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.text_encoder = AutoModel.from_pretrained(model_name)
+                self.text_feature_dim = self.text_encoder.config.hidden_size  # 768 for base
+                
+                if freeze_encoder:
+                    for param in self.text_encoder.parameters():
+                        param.requires_grad = False
+            except Exception as e:
+                print(f"Warning: Could not load pretrained model: {e}")
+                print("Falling back to simple encoder")
+                self.use_pretrained = False
+                self._init_fallback_encoder()
+        else:
+            self._init_fallback_encoder()
+        
+        # Initialize GNN for symptom relationships
+        if GNN_AVAILABLE:
+            self.gnn = SymptomGraphModule(
+                conditions=self.conditions,
+                hidden_dim=gnn_hidden_dim,
+                output_dim=gnn_output_dim,
+                dropout=dropout
+            )
+            self.graph_feature_dim = gnn_output_dim
+        else:
+            # Fallback: learnable graph embedding
+            self.graph_feature_dim = gnn_output_dim
+            self.gnn = nn.Parameter(torch.randn(1, self.graph_feature_dim))
+        
+        # Fusion layer (combines text + graph features)
+        combined_dim = self.text_feature_dim + self.graph_feature_dim
+        self.fusion_layer = nn.Sequential(
+            nn.Linear(combined_dim, fusion_hidden_dim),
+            nn.LayerNorm(fusion_hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(fusion_hidden_dim, fusion_hidden_dim // 2),
+            nn.LayerNorm(fusion_hidden_dim // 2),
+            nn.ReLU(),
+            nn.Dropout(dropout)
+        )
+        
+        # Classification head (diagnosis prediction)
+        self.diagnosis_head = nn.Linear(fusion_hidden_dim // 2, self.num_conditions)
+        
+        # Discriminator head (real vs fake)
+        self.discriminator_head = nn.Sequential(
+            nn.Linear(fusion_hidden_dim // 2, 128),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(128, 1),
+            nn.Sigmoid()
+        )
+        
+        self.dropout = nn.Dropout(dropout)
+        
+    def _init_fallback_encoder(self):
+        """Initialize fallback encoder when transformers not available."""
+        self.text_feature_dim = 768
+        # Simple word embedding + pooling
+        vocab_size = 10000  # Simplified vocabulary
+        self.fallback_embeddings = nn.Embedding(vocab_size, 256)
+        self.fallback_encoder = nn.Sequential(
+            nn.Linear(256, 512),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(512, self.text_feature_dim)
+        )
+        self.tokenizer = None
     
     def _build_keyword_index(self) -> None:
-        """Build keyword index for matching."""
+        """Build keyword index for matching (fallback method)."""
         self.keyword_index = {}
         
         for code, data in self.conditions.items():
@@ -52,6 +164,140 @@ class DiagnosisDiscriminator:
             
             self.keyword_index[code] = keywords
     
+    def encode_text(self, complaints: List[str]) -> torch.Tensor:
+        """
+        Encode text complaints to feature vectors.
+        
+        Args:
+            complaints: List of patient complaint strings
+            
+        Returns:
+            Text features [batch_size, text_feature_dim]
+        """
+        if self.use_pretrained and self.tokenizer is not None:
+            # Use DeBERTa encoder
+            try:
+                inputs = self.tokenizer(
+                    complaints,
+                    padding=True,
+                    truncation=True,
+                    max_length=512,
+                    return_tensors="pt"
+                )
+                
+                # Move to same device as model
+                inputs = {k: v.to(next(self.parameters()).device) for k, v in inputs.items()}
+                
+                with torch.set_grad_enabled(self.training):
+                    outputs = self.text_encoder(**inputs)
+                    # Use [CLS] token representation
+                    text_features = outputs.last_hidden_state[:, 0, :]
+                
+                return text_features
+            except Exception as e:
+                print(f"Warning: Error in DeBERTa encoding: {e}. Using fallback.")
+                return self._encode_text_fallback(complaints)
+        else:
+            return self._encode_text_fallback(complaints)
+    
+    def _encode_text_fallback(self, complaints: List[str]) -> torch.Tensor:
+        """
+        Fallback text encoding using simple embeddings.
+        
+        Args:
+            complaints: List of patient complaint strings
+            
+        Returns:
+            Text features [batch_size, text_feature_dim]
+        """
+        batch_size = len(complaints)
+        device = next(self.parameters()).device
+        
+        # Simple hash-based tokenization
+        features = []
+        for complaint in complaints:
+            words = complaint.lower().split()
+            word_ids = [hash(word) % 10000 for word in words[:50]]  # Max 50 words
+            
+            if word_ids:
+                word_ids_tensor = torch.tensor(word_ids, device=device)
+                word_embeds = self.fallback_embeddings(word_ids_tensor)
+                # Mean pooling
+                pooled = word_embeds.mean(dim=0)
+                encoded = self.fallback_encoder(pooled)
+                features.append(encoded)
+            else:
+                # Empty complaint
+                features.append(torch.zeros(self.text_feature_dim, device=device))
+        
+        return torch.stack(features)
+    
+    def get_graph_features(self, batch_size: int) -> torch.Tensor:
+        """
+        Get graph features for the batch.
+        
+        Args:
+            batch_size: Size of the batch
+            
+        Returns:
+            Graph features [batch_size, graph_feature_dim]
+        """
+        if GNN_AVAILABLE and hasattr(self.gnn, 'forward'):
+            return self.gnn(batch_size)
+        else:
+            # Fallback: repeat learnable embedding
+            return self.gnn.repeat(batch_size, 1)
+    
+    def forward(
+        self, 
+        complaints: List[str], 
+        return_features: bool = False
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Forward pass through the discriminator.
+        
+        Args:
+            complaints: List of patient complaint strings
+            return_features: Whether to return intermediate features
+            
+        Returns:
+            Dictionary with:
+                - diagnosis_logits: [batch_size, num_conditions]
+                - discriminator_scores: [batch_size, 1]
+                - text_features: [batch_size, text_feature_dim] (if return_features=True)
+                - graph_features: [batch_size, graph_feature_dim] (if return_features=True)
+                - fused_features: [batch_size, fusion_dim] (if return_features=True)
+        """
+        batch_size = len(complaints)
+        
+        # Encode text with DeBERTa
+        text_features = self.encode_text(complaints)
+        
+        # Get graph features
+        graph_features = self.get_graph_features(batch_size)
+        
+        # Fuse text and graph features
+        combined_features = torch.cat([text_features, graph_features], dim=1)
+        fused_features = self.fusion_layer(combined_features)
+        
+        # Diagnosis prediction
+        diagnosis_logits = self.diagnosis_head(fused_features)
+        
+        # Real vs fake discrimination
+        discriminator_scores = self.discriminator_head(fused_features)
+        
+        result = {
+            "diagnosis_logits": diagnosis_logits,
+            "discriminator_scores": discriminator_scores
+        }
+        
+        if return_features:
+            result["text_features"] = text_features
+            result["graph_features"] = graph_features
+            result["fused_features"] = fused_features
+        
+        return result
+    
     def predict_diagnosis(
         self,
         complaints: List[str],
@@ -67,41 +313,21 @@ class DiagnosisDiscriminator:
         Returns:
             List of (condition_code, confidence) tuples for each complaint
         """
-        predictions = []
-        
-        for complaint in complaints:
-            complaint_lower = complaint.lower()
+        self.eval()
+        with torch.no_grad():
+            outputs = self.forward(complaints)
+            diagnosis_logits = outputs["diagnosis_logits"]
             
-            # Score each condition
-            scores = {}
-            for code, keywords in self.keyword_index.items():
-                score = 0
-                matches = 0
-                
-                for keyword in keywords:
-                    if keyword in complaint_lower:
-                        matches += 1
-                        # Weight longer keywords more
-                        score += len(keyword) / 10.0
-                
-                if matches > 0:
-                    scores[code] = score
+            # Convert logits to probabilities
+            probs = F.softmax(diagnosis_logits, dim=1)
             
-            # Get top predictions
-            if scores:
-                sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-                # Normalize scores to confidences
-                max_score = sorted_scores[0][1] if sorted_scores else 1.0
-                predictions.append((
-                    sorted_scores[0][0],
-                    min(0.95, sorted_scores[0][1] / max_score)
-                ))
-            else:
-                # Random guess if no matches
-                predictions.append((
-                    random.choice(list(self.conditions.keys())),
-                    0.1
-                ))
+            predictions = []
+            for prob in probs:
+                # Get top prediction
+                top_prob, top_idx = prob.max(dim=0)
+                pred_code = self.condition_codes[top_idx.item()]
+                confidence = top_prob.item()
+                predictions.append((pred_code, confidence))
         
         return predictions
     
@@ -118,26 +344,39 @@ class DiagnosisDiscriminator:
         Returns:
             Tuple of (condition_code, confidence, explanation_dict)
         """
-        prediction = self.predict_diagnosis([complaint])[0]
-        code, confidence = prediction
-        
-        # Build explanation
-        complaint_lower = complaint.lower()
-        matched_keywords = []
-        
-        for keyword in self.keyword_index[code]:
-            if keyword in complaint_lower:
-                matched_keywords.append(keyword)
-        
-        explanation = {
-            "condition_code": code,
-            "condition_name": self.conditions[code]["name"],
-            "confidence": confidence,
-            "matched_keywords": matched_keywords[:5],  # Top 5 matches
-            "reasoning": f"Matched {len(matched_keywords)} symptoms/keywords"
-        }
-        
-        return code, confidence, explanation
+        self.eval()
+        with torch.no_grad():
+            outputs = self.forward([complaint], return_features=True)
+            diagnosis_logits = outputs["diagnosis_logits"][0]
+            
+            # Get prediction
+            probs = F.softmax(diagnosis_logits, dim=0)
+            top_prob, top_idx = probs.max(dim=0)
+            
+            code = self.condition_codes[top_idx.item()]
+            confidence = top_prob.item()
+            
+            # Build explanation with attention-like scores
+            complaint_lower = complaint.lower()
+            matched_keywords = []
+            
+            for keyword in self.keyword_index.get(code, []):
+                if keyword in complaint_lower:
+                    matched_keywords.append(keyword)
+            
+            explanation = {
+                "condition_code": code,
+                "condition_name": self.conditions[code]["name"],
+                "confidence": confidence,
+                "matched_keywords": matched_keywords[:5],
+                "reasoning": f"Neural model prediction with {confidence:.2%} confidence",
+                "top_3_predictions": [
+                    (self.condition_codes[i], probs[i].item())
+                    for i in probs.topk(min(3, len(self.condition_codes))).indices
+                ]
+            }
+            
+            return code, confidence, explanation
     
     def evaluate_batch(
         self,
@@ -177,51 +416,16 @@ class DiagnosisDiscriminator:
     def __call__(self, complaints: List[str], return_features: bool = False) -> Dict[str, torch.Tensor]:
         """
         PyTorch-compatible forward pass for adversarial training.
+        Alias for forward() method.
         
         Args:
             complaints: List of patient complaint strings
             return_features: Whether to return text features
             
         Returns:
-            Dictionary with:
-                - diagnosis_logits: [batch_size, num_conditions]
-                - discriminator_scores: [batch_size, 1] 
-                - text_features: [batch_size, 768] (if return_features=True)
+            Dictionary with model outputs
         """
-        batch_size = len(complaints)
-        num_conditions = len(self.conditions)
-        
-        # Create mock diagnosis logits (include dummy param to enable gradients)
-        diagnosis_logits = torch.zeros(batch_size, num_conditions, device=self.device, requires_grad=True)
-        diagnosis_logits = diagnosis_logits + self._dummy_param * 0  # Include dummy param in computation
-        
-        # Get predictions and convert to logits
-        predictions = self.predict_diagnosis(complaints)
-        with torch.no_grad():
-            for i, (pred_code, confidence) in enumerate(predictions):
-                # Find index of predicted condition
-                condition_codes = list(self.conditions.keys())
-                if pred_code in condition_codes:
-                    pred_idx = condition_codes.index(pred_code)
-                    diagnosis_logits.data[i, pred_idx] = confidence * 10  # Scale confidence to logit-like values
-        
-        # Mock discriminator scores (real vs fake) - include dummy param
-        discriminator_scores = torch.rand(batch_size, 1, device=self.device, requires_grad=True) * 0.5 + 0.5
-        discriminator_scores = discriminator_scores + self._dummy_param * 0
-        
-        result = {
-            "diagnosis_logits": diagnosis_logits,
-            "discriminator_scores": discriminator_scores
-        }
-        
-        # Add text features if requested
-        if return_features:
-            # Mock text features - include dummy param
-            text_features = torch.randn(batch_size, 768, device=self.device, requires_grad=True)
-            text_features = text_features + self._dummy_param * 0
-            result["text_features"] = text_features
-        
-        return result
+        return self.forward(complaints, return_features)
     
     def to(self, device):
         """
@@ -233,53 +437,35 @@ class DiagnosisDiscriminator:
         Returns:
             Self for method chaining
         """
-        self.device = device if isinstance(device, str) else str(device)
-        return self
-    
-    def train(self, mode: bool = True):
-        """
-        Set discriminator to training mode (PyTorch compatibility).
-        
-        Args:
-            mode: Whether to set to training mode
-        """
-        # No-op for mock implementation
-        pass
-    
-    def eval(self):
-        """Set discriminator to evaluation mode (PyTorch compatibility)."""
-        # No-op for mock implementation
-        pass
-    
-    def parameters(self):
-        """
-        Return parameters for optimizer (PyTorch compatibility).
-        
-        Returns:
-            List with dummy parameter for optimizer compatibility
-        """
-        return [self._dummy_param]
+        return super().to(device)
     
     def state_dict(self) -> Dict:
         """
         Return state dictionary for checkpointing.
+        Overrides nn.Module.state_dict() to include custom fields.
         
         Returns:
             Dictionary with model state
         """
-        return {
-            "keyword_index": self.keyword_index,
-            "device": self.device
-        }
+        state = super().state_dict()
+        # Add custom fields
+        state['keyword_index'] = self.keyword_index
+        state['condition_codes'] = self.condition_codes
+        return state
     
-    def load_state_dict(self, state_dict: Dict):
+    def load_state_dict(self, state_dict: Dict, strict: bool = True):
         """
         Load state from dictionary.
         
         Args:
             state_dict: State dictionary to load
+            strict: Whether to strictly enforce key matching
         """
+        # Extract custom fields
         if "keyword_index" in state_dict:
-            self.keyword_index = state_dict["keyword_index"]
-        if "device" in state_dict:
-            self.device = state_dict["device"]
+            self.keyword_index = state_dict.pop("keyword_index")
+        if "condition_codes" in state_dict:
+            self.condition_codes = state_dict.pop("condition_codes")
+        
+        # Load model parameters
+        super().load_state_dict(state_dict, strict=strict)
