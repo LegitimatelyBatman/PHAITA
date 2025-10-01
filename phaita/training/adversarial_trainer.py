@@ -23,6 +23,50 @@ from ..utils.metrics import compute_diversity_metrics, compute_diagnosis_metrics
 from ..utils.realism_scorer import create_realism_scorer, RealismLoss
 
 
+class MockGenerator:
+    """
+    Mock generator wrapper that combines symptom_generator and complaint_generator.
+    Provides PyTorch-compatible interface for adversarial training.
+    """
+    
+    def __init__(self, symptom_generator: SymptomGenerator, complaint_generator: ComplaintGenerator):
+        """
+        Initialize mock generator wrapper.
+        
+        Args:
+            symptom_generator: SymptomGenerator instance
+            complaint_generator: ComplaintGenerator instance
+        """
+        self.symptom_generator = symptom_generator
+        self.complaint_generator = complaint_generator
+        # Create a dummy parameter for optimizer compatibility
+        self._dummy_param = nn.Parameter(torch.zeros(1, requires_grad=True))
+    
+    def parameters(self):
+        """
+        Return parameters for optimizer (PyTorch compatibility).
+        
+        Returns:
+            List with dummy parameter for optimizer compatibility
+        """
+        return [self._dummy_param]
+    
+    def train(self, mode: bool = True):
+        """
+        Set generator to training mode (PyTorch compatibility).
+        
+        Args:
+            mode: Whether to set to training mode
+        """
+        # No-op for mock implementation
+        pass
+    
+    def eval(self):
+        """Set generator to evaluation mode (PyTorch compatibility)."""
+        # No-op for mock implementation
+        pass
+
+
 class DiversityLoss(nn.Module):
     """
     Diversity loss to prevent repetition in generated complaints.
@@ -132,6 +176,9 @@ class AdversarialTrainer:
         self.symptom_generator = SymptomGenerator()
         self.complaint_generator = ComplaintGenerator()
         self.discriminator = DiagnosisDiscriminator().to(self.device)
+        
+        # Create generator wrapper for PyTorch compatibility
+        self.generator = MockGenerator(self.symptom_generator, self.complaint_generator)
         
         # Initialize loss functions
         self.diversity_loss = DiversityLoss()

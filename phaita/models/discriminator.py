@@ -4,6 +4,8 @@ In production, this would use DeBERTa + GNN, but this is a mock implementation.
 """
 
 import random
+import torch
+import torch.nn as nn
 from typing import List, Tuple, Dict, Optional
 from ..data.icd_conditions import RespiratoryConditions
 
@@ -18,6 +20,9 @@ class DiagnosisDiscriminator:
         """Initialize the discriminator."""
         self.conditions = RespiratoryConditions.get_all_conditions()
         self._build_keyword_index()
+        self.device = "cpu"  # Default device
+        # Create a dummy parameter for optimizer compatibility
+        self._dummy_param = nn.Parameter(torch.zeros(1, requires_grad=True))
     
     def _build_keyword_index(self) -> None:
         """Build keyword index for matching."""
@@ -168,3 +173,113 @@ class DiagnosisDiscriminator:
             "correct": correct,
             "total": len(complaints)
         }
+    
+    def __call__(self, complaints: List[str], return_features: bool = False) -> Dict[str, torch.Tensor]:
+        """
+        PyTorch-compatible forward pass for adversarial training.
+        
+        Args:
+            complaints: List of patient complaint strings
+            return_features: Whether to return text features
+            
+        Returns:
+            Dictionary with:
+                - diagnosis_logits: [batch_size, num_conditions]
+                - discriminator_scores: [batch_size, 1] 
+                - text_features: [batch_size, 768] (if return_features=True)
+        """
+        batch_size = len(complaints)
+        num_conditions = len(self.conditions)
+        
+        # Create mock diagnosis logits (include dummy param to enable gradients)
+        diagnosis_logits = torch.zeros(batch_size, num_conditions, device=self.device, requires_grad=True)
+        diagnosis_logits = diagnosis_logits + self._dummy_param * 0  # Include dummy param in computation
+        
+        # Get predictions and convert to logits
+        predictions = self.predict_diagnosis(complaints)
+        with torch.no_grad():
+            for i, (pred_code, confidence) in enumerate(predictions):
+                # Find index of predicted condition
+                condition_codes = list(self.conditions.keys())
+                if pred_code in condition_codes:
+                    pred_idx = condition_codes.index(pred_code)
+                    diagnosis_logits.data[i, pred_idx] = confidence * 10  # Scale confidence to logit-like values
+        
+        # Mock discriminator scores (real vs fake) - include dummy param
+        discriminator_scores = torch.rand(batch_size, 1, device=self.device, requires_grad=True) * 0.5 + 0.5
+        discriminator_scores = discriminator_scores + self._dummy_param * 0
+        
+        result = {
+            "diagnosis_logits": diagnosis_logits,
+            "discriminator_scores": discriminator_scores
+        }
+        
+        # Add text features if requested
+        if return_features:
+            # Mock text features - include dummy param
+            text_features = torch.randn(batch_size, 768, device=self.device, requires_grad=True)
+            text_features = text_features + self._dummy_param * 0
+            result["text_features"] = text_features
+        
+        return result
+    
+    def to(self, device):
+        """
+        Move discriminator to specified device (PyTorch compatibility).
+        
+        Args:
+            device: Device to move to ('cpu' or 'cuda')
+            
+        Returns:
+            Self for method chaining
+        """
+        self.device = device if isinstance(device, str) else str(device)
+        return self
+    
+    def train(self, mode: bool = True):
+        """
+        Set discriminator to training mode (PyTorch compatibility).
+        
+        Args:
+            mode: Whether to set to training mode
+        """
+        # No-op for mock implementation
+        pass
+    
+    def eval(self):
+        """Set discriminator to evaluation mode (PyTorch compatibility)."""
+        # No-op for mock implementation
+        pass
+    
+    def parameters(self):
+        """
+        Return parameters for optimizer (PyTorch compatibility).
+        
+        Returns:
+            List with dummy parameter for optimizer compatibility
+        """
+        return [self._dummy_param]
+    
+    def state_dict(self) -> Dict:
+        """
+        Return state dictionary for checkpointing.
+        
+        Returns:
+            Dictionary with model state
+        """
+        return {
+            "keyword_index": self.keyword_index,
+            "device": self.device
+        }
+    
+    def load_state_dict(self, state_dict: Dict):
+        """
+        Load state from dictionary.
+        
+        Args:
+            state_dict: State dictionary to load
+        """
+        if "keyword_index" in state_dict:
+            self.keyword_index = state_dict["keyword_index"]
+        if "device" in state_dict:
+            self.device = state_dict["device"]
