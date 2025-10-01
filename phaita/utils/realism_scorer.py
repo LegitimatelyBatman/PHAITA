@@ -3,6 +3,7 @@ Realism scoring module for medical complaints.
 Uses language models to assess the authenticity and realism of generated patient complaints.
 """
 
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -12,7 +13,7 @@ import logging
 
 try:
     from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
-    from transformers import pipeline
+    from transformers import AutoModelForCausalLM
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
@@ -34,52 +35,62 @@ class RealismScorer:
             self.logger.warning("Transformers not available, using mock realism scorer")
             self.model = None
             self.tokenizer = None
+            self.perplexity_model = None
+            self.perplexity_tokenizer = None
             return
-        
+
         try:
-            # Try to use medical-specific model if available
             if use_medical_model:
-                try:
-                    # Clinical BERT or BioBERT would be better for medical text
-                    medical_models = [
-                        "emilyalsentzer/Bio_ClinicalBERT",
-                        "dmis-lab/biobert-base-cased-v1.1",
-                        "bert-base-uncased"  # Fallback
-                    ]
-                    
-                    for model_name in medical_models:
-                        try:
-                            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                            self.model = AutoModel.from_pretrained(model_name).to(self.device)
-                            self.logger.info(f"Loaded realism model: {model_name}")
-                            break
-                        except:
-                            continue
-                            
-                except Exception as e:
-                    self.logger.warning(f"Failed to load medical model: {e}")
+                medical_models = [
+                    "emilyalsentzer/Bio_ClinicalBERT",
+                    "dmis-lab/biobert-base-cased-v1.1",
+                    "bert-base-uncased"  # Fallback
+                ]
+
+                last_error: Optional[Exception] = None
+                for candidate in medical_models:
+                    try:
+                        self.tokenizer = AutoTokenizer.from_pretrained(candidate)
+                        self.model = AutoModel.from_pretrained(candidate).to(self.device)
+                        self.logger.info(f"Loaded realism model: {candidate}")
+                        break
+                    except Exception as load_error:
+                        last_error = load_error
+                        continue
+                else:
+                    if last_error:
+                        self.logger.warning(
+                            "Failed to load preferred medical models; falling back to bert-base-uncased: %s",
+                            last_error
+                        )
                     self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
                     self.model = AutoModel.from_pretrained("bert-base-uncased").to(self.device)
             else:
                 self.tokenizer = AutoTokenizer.from_pretrained(model_name)
                 self.model = AutoModel.from_pretrained(model_name).to(self.device)
-            
+
             self.model.eval()
-            
+
             # Initialize perplexity scorer if available
             try:
-                self.perplexity_model = pipeline(
-                    "text-classification",
-                    model="gpt2",
-                    device=0 if torch.cuda.is_available() else -1
-                )
-            except:
+                self.perplexity_tokenizer = AutoTokenizer.from_pretrained("gpt2")
+                # gpt2 has no pad token by default; align with eos token for batching
+                if self.perplexity_tokenizer.pad_token is None:
+                    self.perplexity_tokenizer.pad_token = self.perplexity_tokenizer.eos_token
+
+                self.perplexity_model = AutoModelForCausalLM.from_pretrained("gpt2").to(self.device)
+                self.perplexity_model.eval()
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize perplexity model: {e}")
                 self.perplexity_model = None
-                
+                self.perplexity_tokenizer = None
+
         except Exception as e:
             self.logger.error(f"Failed to initialize realism scorer: {e}")
             self.model = None
             self.tokenizer = None
+            self.perplexity_model = None
+            self.perplexity_tokenizer = None
     
     def compute_realism_score(self, complaints: List[str]) -> torch.Tensor:
         """
@@ -119,19 +130,19 @@ class RealismScorer:
         """Compute fluency score based on language model perplexity."""
         if self.model is None:
             return 0.8 + 0.1 * np.random.randn()
-        
+
         try:
             # Tokenize and encode
-            inputs = self.tokenizer(text, return_tensors="pt", truncation=True, 
+            inputs = self.tokenizer(text, return_tensors="pt", truncation=True,
                                   max_length=512, padding=True).to(self.device)
-            
+
             with torch.no_grad():
-                outputs = self.model(**inputs)
-                
+                outputs = self.model(**inputs, output_attentions=True)
+
                 # Use attention patterns as a proxy for fluency
                 # More uniform attention often indicates more natural text
                 attentions = outputs.attentions[-1] if hasattr(outputs, 'attentions') else None
-                
+
                 if attentions is not None:
                     # Compute attention entropy (higher entropy = more natural)
                     attention_probs = attentions.mean(dim=1)  # Average over heads
@@ -141,9 +152,28 @@ class RealismScorer:
                     # Fallback: use embedding magnitude as proxy
                     embeddings = outputs.last_hidden_state.mean(dim=1)
                     fluency = torch.sigmoid(embeddings.norm(dim=-1)).item()
-            
+
+            if self.perplexity_model is not None:
+                with torch.no_grad():
+                    ppl_inputs = self.perplexity_tokenizer(
+                        text,
+                        return_tensors="pt",
+                        truncation=True,
+                        max_length=256,
+                        padding=True
+                    ).to(self.device)
+                    outputs = self.perplexity_model(
+                        **ppl_inputs,
+                        labels=ppl_inputs["input_ids"]
+                    )
+                    loss = outputs.loss.item()
+                    perplexity = math.exp(min(loss, 20))
+                    # Map perplexity (>=1) to [0,1], higher perplexity -> lower fluency
+                    perplexity_score = 1.0 / (1.0 + (perplexity / 50.0))
+                    fluency = 0.7 * fluency + 0.3 * perplexity_score
+
             return max(0.0, min(1.0, fluency))
-            
+
         except Exception as e:
             self.logger.warning(f"Fluency computation failed: {e}")
             return 0.7
