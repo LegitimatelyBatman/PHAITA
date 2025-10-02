@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Integration test for PHAITA critical bug fixes."""
+"""Integration test for PHAITA critical bug fixes.
+
+IMPORTANT: This test suite REQUIRES real transformer models to be downloaded.
+- Requires: torch==2.5.1, transformers==4.46.0, bitsandbytes==0.44.1, torch-geometric==2.6.1
+- Requires: Internet connection for first-time model downloads (~10GB total)
+- Requires: GPU with 4GB+ VRAM recommended (CPU mode available but slow)
+- May timeout in CI environments without model caching or network access
+
+For lightweight tests that don't require models, see test_basic.py and test_conversation_engine.py.
+"""
 
 import json
 import sys

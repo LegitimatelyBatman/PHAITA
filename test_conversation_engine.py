@@ -1,4 +1,9 @@
-"""Regression tests for the conversation engine's triage flow."""
+"""Regression tests for the conversation engine's triage flow.
+
+Note: This test suite uses stub generators and does NOT require real transformer models.
+It validates the conversation engine logic independently of model implementation.
+For tests requiring real models, see test_integration.py.
+"""
 
 from phaita.conversation.engine import ConversationEngine
 
