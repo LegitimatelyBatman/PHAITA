@@ -6,9 +6,14 @@ Supports both LLM-based generation (Mistral-7B) and template-based fallback.
 import random
 import torch
 import torch.nn as nn
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Iterable
 from .bayesian_network import BayesianSymptomNetwork
 from ..data.icd_conditions import RespiratoryConditions
+from ..generation.patient_agent import (
+    PatientPresentation,
+    PatientSimulator,
+    VocabularyProfile,
+)
 
 try:
     from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
@@ -26,30 +31,31 @@ except ImportError:
 
 
 class SymptomGenerator:
-    """
-    Generates realistic symptom sets for medical conditions.
-    """
-    
+    """Generates structured patient presentations for medical conditions."""
+
     def __init__(self):
-        """Initialize symptom generator with Bayesian network."""
-        self.bayesian_network = BayesianSymptomNetwork()
-    
+        network = BayesianSymptomNetwork()
+        self.simulator = PatientSimulator(network)
+        self.bayesian_network = network
+
     def generate_symptoms(
         self,
         condition_code: str,
-        num_symptoms: Optional[int] = None
-    ) -> List[str]:
-        """
-        Generate symptoms for a given condition.
-        
-        Args:
-            condition_code: ICD-10 condition code
-            num_symptoms: Number of symptoms to generate (None for random)
-            
-        Returns:
-            List of symptoms
-        """
-        return self.bayesian_network.sample_symptoms(condition_code, num_symptoms)
+        num_symptoms: Optional[int] = None,
+        vocabulary_profile: Optional[VocabularyProfile] = None,
+    ) -> PatientPresentation:
+        """Generate a rich patient presentation for a given condition."""
+        return self.simulator.sample_presentation(
+            condition_code,
+            num_symptoms=num_symptoms,
+            vocabulary_profile=vocabulary_profile,
+        )
+
+    def get_conditional_probabilities(
+        self, condition_code: str, symptoms: Optional[Iterable[str]] = None
+    ) -> Dict[str, float]:
+        """Expose the conditional probabilities from the underlying simulator."""
+        return self.simulator.get_conditional_probabilities(condition_code, symptoms)
 
 
 class ComplaintGenerator(nn.Module):
@@ -82,14 +88,40 @@ class ComplaintGenerator(nn.Module):
             device: Device to load model on
         """
         super().__init__()
-        
+
         self.conditions = RespiratoryConditions.get_all_conditions()
+        self.symptom_generator = SymptomGenerator()
+        self.current_presentation: Optional[PatientPresentation] = None
         self.use_llm = use_pretrained and TRANSFORMERS_AVAILABLE
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.top_p = top_p
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        
+        self.severity_terms = [
+            "mild",
+            "moderate",
+            "severe",
+            "terrible",
+            "awful",
+            "worse",
+        ]
+        self.time_terms = [
+            "a few hours",
+            "yesterday",
+            "two days",
+            "this morning",
+            "last night",
+            "a week",
+        ]
+        self.feeling_terms = [
+            "worried",
+            "scared",
+            "exhausted",
+            "panicked",
+            "terrible",
+            "awful",
+        ]
+
         # Try to load LLM
         if self.use_llm:
             try:
@@ -167,10 +199,6 @@ class ComplaintGenerator(nn.Module):
             "Really worried about {main_symptom_phrase}. Also experiencing {other_symptom_phrase}.",
             "Can't seem to shake this {main_symptom_noun}. {other_symptom_phrase} too.",
         ]
-        
-        self.severity_terms = ["mild", "moderate", "severe", "terrible", "awful", "worse"]
-        self.time_terms = ["a few hours", "yesterday", "two days", "this morning", "last night", "a week"]
-        self.feeling_terms = ["worried", "scared", "exhausted", "panicked", "terrible", "awful"]
         
         # Grammar rules for symptom transformation
         self.symptom_grammar_rules = {
@@ -273,27 +301,27 @@ class ComplaintGenerator(nn.Module):
             }
         }
     
-    def _create_prompt(
-        self,
-        symptoms: List[str],
-        condition_code: str
-    ) -> str:
+    def _create_prompt(self, presentation: PatientPresentation) -> str:
         """
         Create a prompt for the LLM to generate a patient complaint.
-        
+
         Args:
-            symptoms: List of medical symptoms
-            condition_code: ICD-10 condition code
-            
+            presentation: Structured patient presentation
+
         Returns:
             Formatted prompt string
         """
-        condition_data = self.conditions.get(condition_code, {})
+        condition_data = self.conditions.get(presentation.condition_code, {})
         condition_name = condition_data.get("name", "respiratory condition")
-        
+
         # Format symptoms as natural language
-        symptom_list = ", ".join(s.replace("_", " ") for s in symptoms[:5])
-        
+        max_terms = presentation.vocabulary_profile.max_terms_per_response
+        phrase_symptoms = [
+            self._format_symptom(presentation, symptom, form="phrase")
+            for symptom in presentation.symptoms[:max_terms]
+        ]
+        symptom_list = ", ".join(phrase_symptoms)
+
         prompt = f"""[INST] You are helping generate realistic patient complaints for medical triage training.
 
 Patient has {condition_name} with symptoms: {symptom_list}
@@ -309,27 +337,22 @@ Patient complaint: [/INST]"""
         
         return prompt
     
-    def _generate_with_llm(
-        self,
-        symptoms: List[str],
-        condition_code: str
-    ) -> str:
+    def _generate_with_llm(self, presentation: PatientPresentation) -> str:
         """
         Generate complaint using LLM.
-        
+
         Args:
-            symptoms: List of medical symptoms
-            condition_code: ICD-10 condition code
-            
+            presentation: Structured patient presentation
+
         Returns:
             Generated complaint string
         """
         if not self.use_llm or self.model is None:
-            return self._generate_with_template(symptoms, condition_code)
-        
+            return self._generate_with_template(presentation)
+
         try:
-            prompt = self._create_prompt(symptoms, condition_code)
-            
+            prompt = self._create_prompt(presentation)
+
             inputs = self.tokenizer(
                 prompt,
                 return_tensors="pt",
@@ -360,48 +383,64 @@ Patient complaint: [/INST]"""
             complaint = complaint.split('\n')[0]  # Take first line
             complaint = complaint[:500]  # Limit length
             
-            return complaint if complaint else self._generate_with_template(symptoms, condition_code)
-        
+            return (
+                complaint
+                if complaint
+                else self._generate_with_template(presentation)
+            )
+
         except Exception as e:
             print(f"Warning: LLM generation failed: {e}")
-            return self._generate_with_template(symptoms, condition_code)
-    
+            return self._generate_with_template(presentation)
+
     def _generate_with_template(
         self,
-        symptoms: List[str],
-        condition_code: str,
-        use_lay_terms: bool = True
+        presentation: PatientPresentation,
+        use_lay_terms: bool = True,
     ) -> str:
         """
         Generate complaint using templates (fallback method).
-        
+
         Args:
-            symptoms: List of medical symptoms
-            condition_code: ICD-10 condition code
+            presentation: Structured patient presentation
             use_lay_terms: Whether to use lay language
-            
+
         Returns:
             Generated complaint string
         """
+        symptoms = presentation.symptoms
+
         if not symptoms:
             return "I'm not feeling well."
-        
+
         # Get lay terms if available
-        if use_lay_terms and condition_code in self.conditions:
-            lay_terms = self.conditions[condition_code]["lay_terms"]
+        if use_lay_terms and presentation.condition_code in self.conditions:
+            lay_terms = self.conditions[presentation.condition_code]["lay_terms"]
             if lay_terms:
                 # Use lay terms for some symptoms
                 display_symptoms = []
-                for symptom in symptoms[:3]:  # Use first 3 symptoms
+                max_terms = presentation.vocabulary_profile.max_terms_per_response
+                for symptom in symptoms[:max_terms]:
+                    canonical = symptom
                     if random.random() < 0.5 and lay_terms:
                         display_symptoms.append(random.choice(lay_terms))
                     else:
-                        display_symptoms.append(symptom.replace('_', ' '))
+                        display_symptoms.append(
+                            self._format_symptom(
+                                presentation, canonical, form="phrase"
+                            )
+                        )
             else:
-                display_symptoms = [s.replace('_', ' ') for s in symptoms[:3]]
+                display_symptoms = [
+                    self._format_symptom(presentation, s, form="phrase")
+                    for s in symptoms[: presentation.vocabulary_profile.max_terms_per_response]
+                ]
         else:
-            display_symptoms = [s.replace('_', ' ') for s in symptoms[:3]]
-        
+            display_symptoms = [
+                self._format_symptom(presentation, s, form="phrase")
+                for s in symptoms[: presentation.vocabulary_profile.max_terms_per_response]
+            ]
+
         # Select template
         template = random.choice(self.templates)
         
@@ -415,38 +454,41 @@ Patient complaint: [/INST]"""
         
         # Handle {symptoms_phrase_form} - symptoms in phrase form (for "My X" constructions)
         if "{symptoms_phrase_form}" in complaint:
-            symptom_phrases = [self._get_symptom_form(s, "phrase") for s in display_symptoms[:2]]
+            symptom_phrases = [
+                self._format_symptom(presentation, s, form="phrase")
+                for s in symptoms[:2]
+            ]
             symptoms_phrase = " and ".join(symptom_phrases)
             complaint = complaint.replace("{symptoms_phrase_form}", symptoms_phrase)
-        
+
         # Handle {main_symptom_gerund} - gerund form
         if "{main_symptom_gerund}" in complaint:
-            main = display_symptoms[0] if display_symptoms else "not feeling well"
-            main_gerund = self._get_symptom_form(main, "gerund")
+            main = symptoms[0] if symptoms else "not feeling well"
+            main_gerund = self._format_symptom(presentation, main, form="gerund")
             complaint = complaint.replace("{main_symptom_gerund}", main_gerund)
-        
+
         # Handle {main_symptom_noun} - noun form
         if "{main_symptom_noun}" in complaint:
-            main = display_symptoms[0] if display_symptoms else "illness"
-            main_noun = self._get_symptom_form(main, "noun")
+            main = symptoms[0] if symptoms else "illness"
+            main_noun = self._format_symptom(presentation, main, form="noun")
             complaint = complaint.replace("{main_symptom_noun}", main_noun)
-        
+
         # Handle {main_symptom_phrase} - phrase form
         if "{main_symptom_phrase}" in complaint:
-            main = display_symptoms[0] if display_symptoms else "not feeling well"
-            main_phrase = self._get_symptom_form(main, "phrase")
+            main = symptoms[0] if symptoms else "not feeling well"
+            main_phrase = self._format_symptom(presentation, main, form="phrase")
             complaint = complaint.replace("{main_symptom_phrase}", main_phrase)
-        
+
         # Handle {main_symptom_action} - action form
         if "{main_symptom_action}" in complaint:
-            main = display_symptoms[0] if display_symptoms else "feel unwell"
-            main_action = self._get_symptom_form(main, "action")
+            main = symptoms[0] if symptoms else "feel unwell"
+            main_action = self._format_symptom(presentation, main, form="action")
             complaint = complaint.replace("{main_symptom_action}", main_action)
-        
+
         # Handle {other_symptom_phrase} - other symptoms in phrase form
         if "{other_symptom_phrase}" in complaint:
-            other = display_symptoms[1] if len(display_symptoms) > 1 else "feeling unwell"
-            other_phrase = self._get_symptom_form(other, "phrase")
+            other = symptoms[1] if len(symptoms) > 1 else "feeling unwell"
+            other_phrase = self._format_symptom(presentation, other, form="phrase")
             complaint = complaint.replace("{other_symptom_phrase}", other_phrase)
         
         # Replace standard placeholders
@@ -521,80 +563,160 @@ Patient complaint: [/INST]"""
             return f"have {symptom_clean}"
         
         return symptom_clean
+
+    def _format_symptom(
+        self, presentation: PatientPresentation, symptom: str, form: str
+    ) -> str:
+        """Combine grammar rules with the patient's vocabulary profile."""
+        base = self._get_symptom_form(symptom, form)
+        return presentation.vocabulary_profile.translate(
+            symptom, form=form, default=base
+        )
     
     def generate_complaint(
         self,
-        symptoms: List[str],
-        condition_code: str,
-        use_lay_terms: bool = True
-    ) -> str:
-        """
-        Generate a natural language patient complaint.
-        Uses LLM if available, otherwise falls back to templates.
-        
-        Args:
-            symptoms: List of medical symptoms
-            condition_code: ICD-10 condition code
-            use_lay_terms: Whether to use lay language (for template mode)
-            
-        Returns:
-            Natural language complaint string
-        """
+        condition_code: Optional[str] = None,
+        presentation: Optional[PatientPresentation] = None,
+        symptoms: Optional[List[str]] = None,
+        num_symptoms: Optional[int] = None,
+        vocabulary_profile: Optional[VocabularyProfile] = None,
+        use_lay_terms: bool = True,
+    ) -> PatientPresentation:
+        """Generate a natural language patient complaint with metadata."""
+
+        if presentation is None:
+            if condition_code is None:
+                raise ValueError(
+                    "Either condition_code or presentation must be provided"
+                )
+            if symptoms is not None:
+                probabilities = self.symptom_generator.get_conditional_probabilities(
+                    condition_code
+                )
+                weights = {
+                    name: max(0.0, 1.0 - probabilities.get(name, 0.0))
+                    for name in probabilities.keys()
+                }
+                vocab = vocabulary_profile or VocabularyProfile.default_for(symptoms)
+                presentation = PatientPresentation(
+                    condition_code=condition_code,
+                    symptoms=list(symptoms),
+                    symptom_probabilities=probabilities,
+                    misdescription_weights=weights,
+                    vocabulary_profile=vocab,
+                )
+            else:
+                presentation = self.symptom_generator.generate_symptoms(
+                    condition_code,
+                    num_symptoms=num_symptoms,
+                    vocabulary_profile=vocabulary_profile,
+                )
+
         if self.use_llm:
-            return self._generate_with_llm(symptoms, condition_code)
+            complaint_text = self._generate_with_llm(presentation)
         else:
-            return self._generate_with_template(symptoms, condition_code, use_lay_terms)
-    
+            complaint_text = self._generate_with_template(
+                presentation, use_lay_terms=use_lay_terms
+            )
+
+        presentation.complaint_text = complaint_text
+        self.current_presentation = presentation
+        return presentation
+
     def generate_multiple_complaints(
         self,
         condition_code: str,
         num_complaints: int = 5
-    ) -> List[str]:
-        """
-        Generate multiple complaints for a condition.
-        
-        Args:
-            condition_code: ICD-10 condition code
-            num_complaints: Number of complaints to generate
-            
-        Returns:
-            List of complaint strings
-        """
-        complaints = []
-        symptom_gen = SymptomGenerator()
-        
+    ) -> List[PatientPresentation]:
+        """Generate multiple patient presentations with complaints."""
+
+        presentations: List[PatientPresentation] = []
+
         for _ in range(num_complaints):
-            symptoms = symptom_gen.generate_symptoms(condition_code)
-            complaint = self.generate_complaint(symptoms, condition_code)
-            complaints.append(complaint)
-        
-        return complaints
-    
+            presentation = self.symptom_generator.generate_symptoms(condition_code)
+            presentations.append(self.generate_complaint(presentation=presentation))
+
+        return presentations
+
+    def answer_question(self, prompt: str, strategy: str = "default") -> str:
+        """Generate a follow-up answer consistent with the active presentation."""
+
+        if self.current_presentation is None:
+            raise ValueError("No active presentation. Call generate_complaint first.")
+
+        presentation = self.current_presentation
+        combined_scores = {
+            symptom: presentation.symptom_probabilities.get(symptom, 0.0)
+            - presentation.misdescription_weights.get(symptom, 0.0)
+            for symptom in presentation.symptom_probabilities
+        }
+        sorted_symptoms = sorted(
+            presentation.symptoms,
+            key=lambda symptom: combined_scores.get(symptom, 0.0),
+            reverse=True,
+        )
+        max_terms = presentation.vocabulary_profile.max_terms_per_response
+
+        selected: List[str] = []
+        for symptom in sorted_symptoms:
+            if len(selected) >= max_terms:
+                break
+            prob = presentation.symptom_probabilities.get(symptom, 0.0)
+            weight = presentation.misdescription_weights.get(symptom, 0.0)
+            if prob <= weight:
+                continue
+            selected.append(symptom)
+
+        if not selected:
+            response = "I'm mostly feeling generally unwell, nothing specific to add."
+        else:
+            phrases = [
+                self._format_symptom(presentation, symptom, form="phrase")
+                for symptom in selected
+            ]
+            lowered_prompt = prompt.lower()
+
+            if "how long" in lowered_prompt or "when" in lowered_prompt:
+                duration = random.choice(self.time_terms)
+                response = (
+                    f"It's been going on for {duration}, and I'm still dealing with "
+                    f"{' and '.join(phrases)}."
+                )
+            elif "severity" in lowered_prompt or "bad" in lowered_prompt:
+                severity = random.choice(self.severity_terms)
+                response = (
+                    f"It feels {severity}. I'm especially bothered by "
+                    f"{' and '.join(phrases)}."
+                )
+            elif strategy == "brief":
+                response = f"Mostly just {' and '.join(phrases)}."
+            elif strategy == "detailed":
+                severity = random.choice(self.severity_terms)
+                duration = random.choice(self.time_terms)
+                response = (
+                    f"I've been dealing with {' and '.join(phrases)} for {duration}, "
+                    f"and it's felt {severity} the whole time."
+                )
+            else:
+                feeling = random.choice(self.feeling_terms)
+                response = (
+                    f"I'm feeling {feeling} because of {' and '.join(phrases)}."
+                )
+
+        presentation.record_response(prompt, response)
+        return response
+
     def forward(
         self,
-        symptoms_batch: List[List[str]],
-        condition_codes: List[str]
-    ) -> List[str]:
-        """
-        PyTorch-compatible forward pass for batch generation.
-        
-        Args:
-            symptoms_batch: List of symptom lists
-            condition_codes: List of condition codes
-            
-        Returns:
-            List of generated complaints
-        """
-        complaints = []
-        for symptoms, code in zip(symptoms_batch, condition_codes):
-            complaint = self.generate_complaint(symptoms, code)
-            complaints.append(complaint)
-        return complaints
-    
+        presentations: List[PatientPresentation],
+    ) -> List[PatientPresentation]:
+        """PyTorch-compatible forward pass for batch generation."""
+
+        return [self.generate_complaint(presentation=p) for p in presentations]
+
     def __call__(self, *args, **kwargs):
         """Make the generator callable."""
-        if len(args) == 2 and isinstance(args[0], list):
-            # Called with (symptoms, condition_code)
+        if args and isinstance(args[0], PatientPresentation):
             return self.generate_complaint(*args, **kwargs)
         else:
             # Called as forward

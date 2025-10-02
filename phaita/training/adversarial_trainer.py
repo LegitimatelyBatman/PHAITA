@@ -266,12 +266,11 @@ class AdversarialTrainer:
             condition_code = random.choice(self.condition_codes)
             condition_codes.append(condition_code)
             
-            # Generate symptoms
-            symptoms = self.symptom_generator.bayesian_network.sample_symptoms(condition_code)
-            
-            # Generate patient complaint
-            complaint = self.complaint_generator.generate_complaint(symptoms, condition_code)
-            complaints.append(complaint)
+            presentation = self.symptom_generator.generate_symptoms(condition_code)
+            presentation = self.complaint_generator.generate_complaint(
+                presentation=presentation
+            )
+            complaints.append(presentation.complaint_text)
         
         # Create labels
         labels = []

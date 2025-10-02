@@ -14,6 +14,11 @@ from .data.icd_conditions import RespiratoryConditions
 from .models.generator import SymptomGenerator, ComplaintGenerator
 from .models.discriminator import DiagnosisDiscriminator
 from .models.bayesian_network import BayesianSymptomNetwork
+from .generation.patient_agent import (
+    PatientPresentation,
+    PatientSimulator,
+    VocabularyProfile,
+)
 
 # Import training components
 try:
@@ -43,6 +48,9 @@ __all__ = [
     "ComplaintGenerator",
     "DiagnosisDiscriminator",
     "BayesianSymptomNetwork",
-    "AdversarialTrainer", 
+    "PatientPresentation",
+    "PatientSimulator",
+    "VocabularyProfile",
+    "AdversarialTrainer",
     "Config"
 ]

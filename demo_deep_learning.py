@@ -83,11 +83,17 @@ def demo_generator():
     ]
     
     for code, name in conditions:
-        symptoms = symptom_gen.generate_symptoms(code)
-        complaint = complaint_gen.generate_complaint(symptoms, code)
+        presentation = symptom_gen.generate_symptoms(code)
+        presentation = complaint_gen.generate_complaint(presentation=presentation)
         print(f"\n  {name} ({code}):")
-        print(f"    Symptoms: {', '.join(symptoms[:3])}")
-        print(f"    Complaint: {complaint}")
+        print(f"    Symptoms: {', '.join(presentation.symptoms[:3])}")
+        print(f"    Complaint: {presentation.complaint_text}")
+        probs_preview = list(presentation.symptom_probabilities.items())[:2]
+        if probs_preview:
+            print(
+                "    Probabilities: "
+                + ", ".join(f"{symptom}={prob:.2f}" for symptom, prob in probs_preview)
+            )
 
 
 def demo_question_generator():
@@ -147,29 +153,31 @@ def demo_integrated_pipeline():
     symptom_gen = SymptomGenerator()
     complaint_gen = ComplaintGenerator(use_pretrained=False)
     
-    symptoms = symptom_gen.generate_symptoms("J45.9")
-    complaint = complaint_gen.generate_complaint(symptoms, "J45.9")
-    print(f"    Generated: {complaint}")
-    
+    presentation = symptom_gen.generate_symptoms("J45.9")
+    presentation = complaint_gen.generate_complaint(presentation=presentation)
+    print(f"    Generated: {presentation.complaint_text}")
+
     # Step 2: Preprocess
     print("\n  Step 2: Preprocess and extract terms")
     preprocessor = DataPreprocessor()
-    processed = preprocessor.preprocess_complaints([complaint])[0]
+    processed = preprocessor.preprocess_complaints([presentation.complaint_text])[0]
     terms = preprocessor.extract_medical_terms(processed)
     print(f"    Processed: {processed}")
     print(f"    Terms found: {len(terms)}")
-    
+
     # Step 3: Predict diagnosis
     print("\n  Step 3: Predict diagnosis")
     disc = DiagnosisDiscriminator(use_pretrained=False)
-    code, confidence, explanation = disc.predict_with_explanation(complaint)
+    code, confidence, explanation = disc.predict_with_explanation(
+        presentation.complaint_text
+    )
     print(f"    Predicted: {explanation['condition_name']} ({code})")
     print(f"    Confidence: {confidence:.2%}")
-    
+
     # Step 4: Generate follow-up question
     print("\n  Step 4: Generate follow-up question")
     qgen = QuestionGenerator(use_pretrained=False)
-    question = qgen.generate_clarifying_question(symptoms)
+    question = qgen.generate_clarifying_question(presentation.symptoms)
     print(f"    Question: {question}")
     
     print("\n✅ Pipeline complete!")

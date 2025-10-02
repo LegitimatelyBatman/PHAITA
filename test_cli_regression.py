@@ -2,6 +2,7 @@ from argparse import Namespace
 from unittest.mock import MagicMock, patch
 
 import cli
+from phaita.generation.patient_agent import PatientPresentation, VocabularyProfile
 
 
 def test_diagnose_command_invokes_predict_with_explanation(capsys):
@@ -39,8 +40,25 @@ def test_challenge_command_uses_real_predictions(capsys):
             return ["cough"], metadata
 
     class FakeComplaintGenerator:
-        def generate_complaint(self, symptoms, condition_code):
-            return f"complaint for {condition_code}"
+        def generate_complaint(
+            self,
+            condition_code=None,
+            presentation=None,
+            symptoms=None,
+            **kwargs,
+        ):
+            condition = condition_code or "J45.9"
+            symptom_list = symptoms or []
+            if presentation is None:
+                presentation = PatientPresentation(
+                    condition_code=condition,
+                    symptoms=list(symptom_list),
+                    symptom_probabilities={symptom: 0.8 for symptom in symptom_list},
+                    misdescription_weights={symptom: 0.2 for symptom in symptom_list},
+                    vocabulary_profile=VocabularyProfile.default_for(symptom_list),
+                )
+            presentation.complaint_text = f"complaint for {condition}"
+            return presentation
 
     discriminator = MagicMock()
     discriminator.predict_diagnosis.side_effect = [
