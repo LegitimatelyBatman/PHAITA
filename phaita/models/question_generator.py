@@ -142,7 +142,9 @@ class QuestionGenerator(nn.Module):
         
         Args:
             symptoms: List of symptoms
-            previous_answers: Previously answered questions
+            previous_answers: Previously provided answers
+            previous_questions: Questions asked earlier in the exchange
+            conversation_history: Structured history of question/answer pairs
             
         Returns:
             Formatted prompt string
@@ -166,20 +168,29 @@ Question: [/INST]"""
     def _generate_with_llm(
         self,
         symptoms: List[str],
-        previous_answers: Optional[List[str]] = None
+        previous_answers: Optional[List[str]] = None,
+        previous_questions: Optional[List[str]] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         """
         Generate question using LLM.
         
         Args:
             symptoms: List of symptoms
-            previous_answers: Previously answered questions
+            previous_answers: Previously provided answers
+            previous_questions: Questions asked earlier in the exchange
+            conversation_history: Structured history of question/answer pairs
             
         Returns:
             Generated question string
         """
         if not self.use_llm or self.model is None:
-            return self._generate_with_template(symptoms, previous_answers)
+            return self._generate_with_template(
+                symptoms,
+                previous_answers=previous_answers,
+                previous_questions=previous_questions,
+                conversation_history=conversation_history,
+            )
         
         try:
             prompt = self._create_question_prompt(symptoms, previous_answers)
@@ -220,19 +231,28 @@ Question: [/INST]"""
         
         except Exception as e:
             print(f"Warning: LLM question generation failed: {e}")
-            return self._generate_with_template(symptoms, previous_answers)
+            return self._generate_with_template(
+                symptoms,
+                previous_answers=previous_answers,
+                previous_questions=previous_questions,
+                conversation_history=conversation_history,
+            )
     
     def _generate_with_template(
         self,
         symptoms: List[str],
-        previous_answers: Optional[List[str]] = None
+        previous_answers: Optional[List[str]] = None,
+        previous_questions: Optional[List[str]] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         """
         Generate question using templates (fallback).
         
         Args:
             symptoms: List of symptoms
-            previous_answers: Previously answered questions
+            previous_answers: Previously provided answers
+            previous_questions: Questions asked earlier in the exchange
+            conversation_history: Structured history of question/answer pairs
             
         Returns:
             Question string
@@ -249,18 +269,26 @@ Question: [/INST]"""
                     available_symptoms.append(key)
                     break
         
+        asked = set(previous_questions or [])
+
         if available_symptoms:
             symptom = random.choice(available_symptoms)
-            questions = self.clarifying_questions[symptom]
-            return random.choice(questions)
-        
-        # Default question
-        return "Can you tell me more about when these symptoms started?"
+            questions = [q for q in self.clarifying_questions[symptom] if q not in (previous_questions or [])]
+            if questions:
+                return random.choice(questions)
+
+        default_question = "Can you tell me more about when these symptoms started?"
+        if default_question in asked:
+            default_question = "Are there any other symptoms we should know about?"
+
+        return default_question
     
     def generate_clarifying_question(
         self,
         symptoms: List[str],
-        previous_answers: Optional[List[str]] = None
+        previous_answers: Optional[List[str]] = None,
+        previous_questions: Optional[List[str]] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         """
         Generate a clarifying question based on symptoms.
@@ -268,15 +296,27 @@ Question: [/INST]"""
         
         Args:
             symptoms: List of symptoms
-            previous_answers: Previously answered questions
+            previous_answers: Previously provided answers
+            previous_questions: Questions asked earlier in the exchange
+            conversation_history: Structured history of question/answer pairs
             
         Returns:
             Clarifying question string
         """
         if self.use_llm:
-            return self._generate_with_llm(symptoms, previous_answers)
+            return self._generate_with_llm(
+                symptoms,
+                previous_answers=previous_answers,
+                previous_questions=previous_questions,
+                conversation_history=conversation_history,
+            )
         else:
-            return self._generate_with_template(symptoms, previous_answers)
+            return self._generate_with_template(
+                symptoms,
+                previous_answers=previous_answers,
+                previous_questions=previous_questions,
+                conversation_history=conversation_history,
+            )
     
     def generate_followup_questions(
         self,

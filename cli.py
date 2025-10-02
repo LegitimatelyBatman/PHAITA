@@ -14,7 +14,16 @@ from pathlib import Path
 # Add the package to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from phaita import AdversarialTrainer, Config, RespiratoryConditions, SymptomGenerator, ComplaintGenerator, DiagnosisDiscriminator
+from phaita import (
+    AdversarialTrainer,
+    ComplaintGenerator,
+    Config,
+    DiagnosisDiscriminator,
+    RespiratoryConditions,
+    SymptomGenerator,
+)
+from phaita.conversation import ConversationEngine
+from phaita.models.question_generator import QuestionGenerator
 # from phaita.models import SymptomGenerator, ComplaintGenerator, DiagnosisDiscriminator
 try:
     from phaita.models.enhanced_bayesian_network import create_enhanced_bayesian_network
@@ -192,6 +201,55 @@ def generate_command(args):
             print(f"\n{i}. {result['condition_code']}: {result['condition_name']}")
             print(f"   Complaint: \"{result['complaint']}\"")
 
+
+def conversation_command(args):
+    """Run an interactive conversation loop using the dialogue controller."""
+
+    print("🗣️  PHAITA Conversation Engine")
+    print("=" * 40)
+
+    qgen = QuestionGenerator(use_pretrained=False)
+    engine = ConversationEngine(
+        qgen,
+        max_questions=args.max_questions,
+        min_symptom_count=args.min_symptoms,
+        max_no_progress_turns=args.max_no_progress,
+    )
+
+    if args.symptoms:
+        seed_symptoms = [s.strip() for s in args.symptoms.split(',') if s.strip()]
+        engine.add_symptoms(seed_symptoms)
+        if seed_symptoms:
+            print(f"Seeded symptoms: {', '.join(seed_symptoms)}")
+
+    while True:
+        if engine.should_present_diagnosis():
+            break
+
+        prompt = engine.next_prompt()
+        if not prompt:
+            break
+
+        print(f"\nAI: {prompt}")
+        response = input("You: ").strip()
+
+        if response.lower() in {"quit", "exit", "q"}:
+            print("Ending conversation early at user request.")
+            break
+
+        extracted_symptoms = [s.strip() for s in response.split(',') if s.strip()]
+        engine.record_response(prompt, response, extracted_symptoms)
+
+    print("\nConversation complete.")
+    if engine.symptoms:
+        print(f"Gathered symptoms: {', '.join(engine.symptoms)}")
+    else:
+        print("No symptoms were gathered during this exchange.")
+
+    if engine.should_present_diagnosis():
+        print("Ready to present preliminary diagnoses based on collected data.")
+    else:
+        print("Conversation ended without meeting diagnostic criteria.")
 
 
 def diagnose_command(args):
@@ -512,6 +570,7 @@ Examples:
   python cli.py demo --num-examples 5
   python cli.py generate --count 10 --output data.json
   python cli.py generate --condition "pneumonia" --count 5
+  python cli.py conversation --symptoms "cough,fever"
   python cli.py diagnose --complaint "I can't breathe and have chest pain"
   python cli.py diagnose --interactive --detailed
   python cli.py challenge --rare-cases 5 --show-failures --verbose
@@ -544,7 +603,18 @@ Examples:
                           help='Specific condition to generate for')
     gen_parser.add_argument('--output', type=str,
                           help='Output file for generated data')
-    
+
+    # Conversation command
+    convo_parser = subparsers.add_parser('conversation', help='Run interactive symptom clarification loop')
+    convo_parser.add_argument('--symptoms', type=str,
+                              help='Comma-separated list of initial symptoms')
+    convo_parser.add_argument('--max-questions', type=int, default=5,
+                              help='Maximum number of clarifying questions to ask')
+    convo_parser.add_argument('--min-symptoms', type=int, default=3,
+                              help='Number of symptoms required before stopping')
+    convo_parser.add_argument('--max-no-progress', type=int, default=2,
+                              help='Number of consecutive turns without new symptoms before stopping')
+
     # Diagnose command
     diagnose_parser = subparsers.add_parser('diagnose', help='Test discriminator on user complaint')
     diagnose_parser.add_argument('--complaint', type=str,
@@ -577,6 +647,8 @@ Examples:
         demo_command(args)
     elif args.command == 'generate':
         generate_command(args)
+    elif args.command == 'conversation':
+        conversation_command(args)
     elif args.command == 'diagnose':
         diagnose_command(args)
     elif args.command == 'challenge':
