@@ -178,12 +178,6 @@ class DiagnosisDiscriminator(nn.Module):
                 f"Error in DeBERTa encoding: {e}\n"
                 f"Ensure model is properly loaded and device has sufficient memory."
             ) from e
-                features.append(encoded)
-            else:
-                # Empty complaint
-                features.append(torch.zeros(self.text_feature_dim, device=device))
-        
-        return torch.stack(features)
     
     def get_graph_features(self, batch_size: int) -> torch.Tensor:
         """
@@ -195,11 +189,7 @@ class DiagnosisDiscriminator(nn.Module):
         Returns:
             Graph features [batch_size, graph_feature_dim]
         """
-        if GNN_AVAILABLE and hasattr(self.gnn, 'forward'):
-            return self.gnn(batch_size)
-        else:
-            # Fallback: repeat learnable embedding
-            return self.gnn.repeat(batch_size, 1)
+        return self.gnn(batch_size)
     
     def forward(
         self, 
