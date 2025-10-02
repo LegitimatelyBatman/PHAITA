@@ -10,6 +10,7 @@ This note summarises how the deep-learning version of PHAITA differs from the li
 ## Training Loop Enhancements
 - Shared `AdversarialTrainer` handles alternating optimisation, gradient clipping, cosine learning-rate schedules, and curriculum sampling between synthetic and forum-style text.
 - Diversity, realism, and medical-consistency losses are combined with the adversarial objectives to stabilise training.
+- Curriculum mixing now returns a supervision mask so unlabeled forum complaints skip cross-entropy; their contribution is an entropy-minimisation term that regularises the discriminator without fabricating targets.
 
 ## Supporting Utilities
 - `phaita/utils/realism_scorer.py` scores complaints with transformer embeddings when available.

@@ -2,6 +2,7 @@ import importlib
 import sys
 import types
 from typing import Dict, List
+from unittest import mock
 
 import torch
 import torch.nn as nn
@@ -168,12 +169,13 @@ def test_discriminator_uses_physician_verified_corpus():
 
         captured_batches = []
 
-        def fake_train_discriminator(real_complaints, real_labels, fake_complaints):
+        def fake_train_discriminator(real_complaints, real_labels, fake_complaints, label_mask=None):
             captured_batches.append(
                 (
                     list(real_complaints),
                     list(fake_complaints),
                     real_labels.detach().cpu().tolist(),
+                    None if label_mask is None else label_mask.detach().cpu().tolist(),
                 )
             )
             trainer.disc_optimizer.zero_grad()
@@ -183,6 +185,7 @@ def test_discriminator_uses_physician_verified_corpus():
                 "real_diagnosis_loss": 0.0,
                 "real_adv_loss": 0.0,
                 "fake_adv_loss": 0.0,
+                "unsupervised_loss": 0.0,
             }
 
         def fake_train_generator(batch_size):
@@ -226,7 +229,7 @@ def test_discriminator_uses_physician_verified_corpus():
         trainer.train(num_epochs=1, batch_size=2, eval_interval=1, save_interval=5)
 
         assert captured_batches, "Expected discriminator to receive at least one batch"
-        real_batch, fake_batch, label_indices = captured_batches[0]
+        real_batch, fake_batch, label_indices, label_mask = captured_batches[0]
 
         curated_texts = {entry["text"] for entry in trainer.real_dataset}
         assert set(real_batch).issubset(curated_texts)
@@ -234,3 +237,45 @@ def test_discriminator_uses_physician_verified_corpus():
 
         curated_indices = {entry["label_idx"] for entry in trainer.real_dataset}
         assert set(label_indices).issubset(curated_indices)
+        assert all(value == 1 for value in label_mask)
+
+
+def test_forum_samples_are_marked_unlabeled():
+    with ModulePatcher():
+        trainer_module = importlib.import_module("phaita.training.adversarial_trainer")
+        importlib.reload(trainer_module)
+
+        trainer = trainer_module.AdversarialTrainer(
+            use_curriculum_learning=True,
+            use_forum_data=False,
+            realism_weight=0.0,
+        )
+
+        trainer.forum_complaints = [
+            "forum complaint a",
+            "forum complaint b",
+            "forum complaint c",
+        ]
+
+        def deterministic_batch(batch_size):
+            complaints = [f"synthetic_{idx}" for idx in range(batch_size)]
+            codes = [trainer.condition_codes[idx % len(trainer.condition_codes)] for idx in range(batch_size)]
+            labels = torch.tensor([
+                trainer.condition_codes.index(code) for code in codes
+            ], dtype=torch.long, device=trainer.device)
+            return complaints, codes, labels
+
+        trainer.generate_training_batch = deterministic_batch  # type: ignore[assignment]
+
+        with mock.patch("random.randint", side_effect=AssertionError("random labels are not allowed")):
+            complaints, labels, mask = trainer._sample_mixed_training_data(batch_size=6, forum_ratio=0.5)
+
+        assert len(complaints) == len(labels) == len(mask)
+
+        forum_count = (~mask).sum().item()
+        assert forum_count == 3
+
+        forum_complaints_in_batch = [
+            complaint for complaint, is_labeled in zip(complaints, mask.tolist()) if not is_labeled
+        ]
+        assert set(forum_complaints_in_batch).issubset(set(trainer.forum_complaints))

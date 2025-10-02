@@ -179,6 +179,7 @@ class AdversarialTrainer:
         self.realism_weight = realism_weight
         self.condition_codes = list(RespiratoryConditions.get_all_conditions().keys())
         self.training_history = defaultdict(list)
+        self.unsupervised_weight = 0.1
         
         # Curriculum learning parameters
         self.use_curriculum_learning = use_curriculum_learning
@@ -299,33 +300,43 @@ class AdversarialTrainer:
         else:  # Stage 2: Forum heavy
             return 0.7
     
-    def _sample_mixed_training_data(self, batch_size: int, forum_ratio: float) -> Tuple[List[str], torch.Tensor]:
-        """Sample mixed synthetic and forum data based on curriculum."""
+    def _sample_mixed_training_data(
+        self, batch_size: int, forum_ratio: float
+    ) -> Tuple[List[str], torch.Tensor, torch.Tensor]:
+        """Sample mixed synthetic and forum data based on curriculum.
+
+        Returns a tuple containing the combined complaints, a tensor of label
+        indices (placeholders for unlabeled samples), and a boolean mask
+        indicating which entries are backed by ground-truth supervision.
+        """
         forum_count = int(batch_size * forum_ratio)
         synthetic_count = batch_size - forum_count
-        
+
         all_complaints = []
         all_labels = []
-        
+        label_mask = []
+
         # Generate synthetic data
         if synthetic_count > 0:
             synthetic_complaints, condition_codes, synthetic_labels = self.generate_training_batch(synthetic_count)
             all_complaints.extend(synthetic_complaints)
             all_labels.extend(synthetic_labels.tolist())
-        
+            label_mask.extend([True] * len(synthetic_complaints))
+
         # Sample forum data
         if forum_count > 0 and self.forum_complaints:
             forum_subset = random.sample(self.forum_complaints, min(forum_count, len(self.forum_complaints)))
             all_complaints.extend(forum_subset)
-            
-            # For forum data, assign random labels (as they're unlabeled)
-            forum_labels = [random.randint(0, len(self.condition_codes) - 1) for _ in range(len(forum_subset))]
-            all_labels.extend(forum_labels)
-        
-        # Convert labels to tensor
-        labels_tensor = torch.tensor(all_labels, dtype=torch.long, device=self.device)
-        
-        return all_complaints, labels_tensor
+
+            # Forum data is unlabeled; use padding value with mask to skip supervision
+            all_labels.extend([0] * len(forum_subset))
+            label_mask.extend([False] * len(forum_subset))
+
+        # Convert labels and masks to tensors
+        labels_tensor = torch.tensor(all_labels, dtype=torch.long, device=self.device) if all_labels else torch.empty(0, dtype=torch.long, device=self.device)
+        mask_tensor = torch.tensor(label_mask, dtype=torch.bool, device=self.device) if label_mask else torch.empty(0, dtype=torch.bool, device=self.device)
+
+        return all_complaints, labels_tensor, mask_tensor
     
     def generate_training_batch(self, batch_size: int) -> Tuple[List[str], List[str], torch.Tensor]:
         """
@@ -360,30 +371,58 @@ class AdversarialTrainer:
         
         return complaints, condition_codes, labels
     
-    def train_discriminator_step(self, real_complaints: List[str], real_labels: torch.Tensor,
-                                fake_complaints: List[str]) -> Dict[str, float]:
+    def train_discriminator_step(
+        self,
+        real_complaints: List[str],
+        real_labels: torch.Tensor,
+        fake_complaints: List[str],
+        label_mask: Optional[torch.Tensor] = None,
+    ) -> Dict[str, float]:
         """
         Train discriminator for one step with proper gradient computation.
-        
+
         Args:
             real_complaints: Real patient complaints (or high-quality synthetic)
             real_labels: True condition labels
             fake_complaints: Generated complaints from current generator
-        
+            label_mask: Boolean mask identifying which real samples carry labels
+
         Returns:
             Dictionary of loss values
         """
         self.discriminator.train()
         self.disc_optimizer.zero_grad()
-        
+
+        if label_mask is None:
+            label_mask = torch.ones(len(real_complaints), dtype=torch.bool, device=self.device)
+        else:
+            label_mask = label_mask.to(self.device)
+
+        real_labels = real_labels.to(self.device)
+
         # Process real data
         real_outputs = self.discriminator(real_complaints)
-        real_diagnosis_loss = self.diagnosis_loss(real_outputs["diagnosis_logits"], real_labels)
-        
+        labeled_mask = label_mask
+        unlabeled_mask = ~labeled_mask if labeled_mask.numel() else torch.empty_like(labeled_mask)
+
+        if labeled_mask.any():
+            supervised_logits = real_outputs["diagnosis_logits"][labeled_mask]
+            supervised_labels = real_labels[labeled_mask]
+            real_diagnosis_loss = self.diagnosis_loss(supervised_logits, supervised_labels)
+        else:
+            real_diagnosis_loss = torch.tensor(0.0, device=self.device)
+
+        unsupervised_loss = torch.tensor(0.0, device=self.device)
+        if unlabeled_mask.any():
+            unlabeled_logits = real_outputs["diagnosis_logits"][unlabeled_mask]
+            probabilities = torch.softmax(unlabeled_logits, dim=-1)
+            entropy = -(probabilities * torch.log(probabilities + 1e-8)).sum(dim=-1)
+            unsupervised_loss = entropy.mean()
+
         # Real samples should be classified as real (label = 1)
         real_labels_adv = torch.ones(len(real_complaints), 1, device=self.device)
         real_adv_loss = self.adversarial_loss(real_outputs["discriminator_scores"], real_labels_adv)
-        
+
         # Process fake data (detach to avoid generator gradient flow)
         fake_outputs = self.discriminator(fake_complaints)
         
@@ -392,8 +431,8 @@ class AdversarialTrainer:
         fake_adv_loss = self.adversarial_loss(fake_outputs["discriminator_scores"], fake_labels_adv)
         
         # Total discriminator loss
-        disc_loss = real_diagnosis_loss + real_adv_loss + fake_adv_loss
-        
+        disc_loss = real_diagnosis_loss + real_adv_loss + fake_adv_loss + self.unsupervised_weight * unsupervised_loss
+
         disc_loss.backward()
         
         # Gradient clipping
@@ -405,7 +444,8 @@ class AdversarialTrainer:
             "disc_loss": disc_loss.item(),
             "real_diagnosis_loss": real_diagnosis_loss.item(),
             "real_adv_loss": real_adv_loss.item(),
-            "fake_adv_loss": fake_adv_loss.item()
+            "fake_adv_loss": fake_adv_loss.item(),
+            "unsupervised_loss": unsupervised_loss.item(),
         }
     
     def train_generator_step(self, batch_size: int) -> Dict[str, float]:
@@ -531,16 +571,18 @@ class AdversarialTrainer:
                     real_complaints = [sample["text"] for sample in real_samples]
                     real_label_indices = [sample["label_idx"] for sample in real_samples]
                     real_labels = torch.tensor(real_label_indices, dtype=torch.long, device=self.device)
+                    real_label_mask = torch.ones(len(real_complaints), dtype=torch.bool, device=self.device)
                 elif self.use_curriculum_learning and self.forum_complaints:
-                    real_complaints, real_labels = self._sample_mixed_training_data(batch_size, forum_ratio)
+                    real_complaints, real_labels, real_label_mask = self._sample_mixed_training_data(batch_size, forum_ratio)
                 else:
                     # Fall back to synthetic data when no curated corpus is available
                     real_complaints = fake_complaints
                     real_labels = fake_labels
-                
+                    real_label_mask = torch.ones(len(real_complaints), dtype=torch.bool, device=self.device)
+
                 # Train discriminator
                 disc_losses = self.train_discriminator_step(
-                    real_complaints, real_labels, fake_complaints
+                    real_complaints, real_labels, fake_complaints, real_label_mask
                 )
                 
                 # Train generator (less frequently to balance training)
