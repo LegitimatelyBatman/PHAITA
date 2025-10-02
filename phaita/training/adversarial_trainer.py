@@ -396,9 +396,9 @@ class AdversarialTrainer:
         self.discriminator.eval()
         
         with torch.no_grad():
-            predictions = self.discriminator.predict_diagnosis(eval_complaints)
-            predicted_codes = [pred[0] for pred in predictions]
-            confidences = [pred[1] for pred in predictions]
+            predictions = self.discriminator.predict_diagnosis(eval_complaints, top_k=1)
+            predicted_codes = [pred[0]["condition_code"] for pred in predictions]
+            confidences = [pred[0]["probability"] for pred in predictions]
         
         # Compute metrics
         metrics = compute_diagnosis_metrics(eval_labels, predicted_codes, confidences)

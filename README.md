@@ -59,8 +59,9 @@ symptoms = ["shortness_of_breath", "wheezing"]
 complaint = generator.generate_complaint(symptoms, "J45.9")
 print(complaint)
 
-predictions = discriminator.predict_diagnosis([complaint])
-print(predictions[0])
+predictions = discriminator.predict_diagnosis([complaint], top_k=3)
+for candidate in predictions[0]:
+    print(candidate["condition_code"], candidate["probability"])
 ```
 
 ## Repository Guide
