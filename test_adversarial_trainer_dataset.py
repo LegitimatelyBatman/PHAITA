@@ -343,3 +343,28 @@ def test_train_generator_step_updates_generator_parameters():
         assert "policy_loss" in losses
         assert not torch.allclose(initial_param, updated_param)
         assert torch.isfinite(torch.tensor(list(losses.values()))).all()
+
+
+def test_train_generator_step_does_not_update_discriminator_grads():
+    with ModulePatcher():
+        trainer_module = importlib.import_module("phaita.training.adversarial_trainer")
+        importlib.reload(trainer_module)
+
+        trainer = trainer_module.AdversarialTrainer(
+            use_curriculum_learning=False,
+            use_forum_data=False,
+            realism_weight=0.0,
+        )
+
+        discriminator = trainer.discriminator
+
+        for param in discriminator.parameters():
+            param.grad = None
+
+        with mock.patch.object(discriminator, "forward", wraps=discriminator.forward) as mocked_forward:
+            trainer.train_generator_step(batch_size=2)
+
+        assert mocked_forward.called
+        assert discriminator.training, "Discriminator should return to training mode after generator step"
+        for param in discriminator.parameters():
+            assert param.grad is None, "Discriminator gradients should remain None during generator step"
