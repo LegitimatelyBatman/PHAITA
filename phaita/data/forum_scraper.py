@@ -1,19 +1,50 @@
-"""
-Forum scraping and lay language mapping utilities.
-Provides mock implementation for Reddit/Patient.info scraping and lay-to-medical terminology mapping.
+"""Forum scraping and lay language mapping utilities.
+
+This module provides production-ready clients for harvesting forum data from
+Reddit and Patient.info. The :class:`ForumScraper` coordinates the scraping
+pipeline, normalises the raw posts into :class:`ForumPost` records and offers a
+simple caching layer so downstream components can operate on persisted data.
+
+The implementation keeps the original dataclass shape that the rest of the
+project expects while replacing the previous template-driven mock logic with
+real HTTP/API clients. The clients honour rate limiting and authentication
+requirements and can be swapped out (e.g. during tests) via dependency
+injection.
 """
 
+from __future__ import annotations
+
 import json
-import random
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+import logging
+import os
+import time
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+logger = logging.getLogger(__name__)
+
+try:  # Optional dependency, only required when the Reddit client is used.
+    import praw  # type: ignore
+except Exception:  # pragma: no cover - handled dynamically at runtime.
+    praw = None  # type: ignore
+
+try:  # Optional dependency, only required when the Patient.info client is used.
+    import requests  # type: ignore
+except Exception:  # pragma: no cover
+    requests = None  # type: ignore
+
+try:  # Optional dependency, only required when the Patient.info client is used.
+    from bs4 import BeautifulSoup  # type: ignore
+except Exception:  # pragma: no cover
+    BeautifulSoup = None  # type: ignore
 
 
 @dataclass
 class ForumPost:
     """Represents a scraped forum post."""
+
     id: str
     title: str
     content: str
@@ -24,266 +55,11 @@ class ForumPost:
     confidence_score: float
 
 
-class ForumScraper:
-    """
-    Scrapes health forums for lay language examples.
-    Mock implementation that generates realistic synthetic forum posts.
-    """
-    
-    def __init__(self, cache_dir: Optional[str] = None):
-        """
-        Initialize forum scraper.
-        
-        Args:
-            cache_dir: Directory to cache scraped posts
-        """
-        self.cache_dir = Path(cache_dir) if cache_dir else Path("forum_data")
-        self.cache_dir.mkdir(exist_ok=True)
-        
-        # Mock forum post templates
-        self._post_templates = [
-            "I've been {symptom} for {time} and I'm really worried. {detail}",
-            "Does anyone else get {symptom}? It's been {time} and getting worse.",
-            "Help! {symptom} and {other_symptom}. Started {time} ago.",
-            "My {relation} has {symptom}. Should we go to ER? {detail}",
-            "Been {symptom} since {time}. Doctor says {diagnosis} but not sure."
-        ]
-        
-        self._details = [
-            "Can't sleep at night.",
-            "It's affecting my daily life.",
-            "Never had this before.",
-            "Getting really scared.",
-            "What should I do?"
-        ]
-    
-    def scrape_reddit_health(self, max_posts: int = 10) -> List[ForumPost]:
-        """
-        Scrape health-related posts from Reddit (mock implementation).
-        
-        Args:
-            max_posts: Maximum number of posts to scrape
-            
-        Returns:
-            List of ForumPost objects
-        """
-        posts = []
-        
-        # Condition-specific symptom mappings for realistic forum posts
-        condition_symptoms = {
-            "asthma": {
-                "primary": [
-                    ("can't breathe", "dyspnea"),
-                    ("wheezy", "wheezing"),
-                    ("tight chest", "chest_tightness"),
-                ],
-                "secondary": [
-                    ("coughing", "cough"),
-                    ("really tired", "fatigue"),
-                    ("waking up at night", "nocturnal_symptoms")
-                ]
-            },
-            "pneumonia": {
-                "primary": [
-                    ("coughing up stuff", "productive_cough"),
-                    ("chest hurts", "chest_pain"),
-                    ("burning up", "fever"),
-                ],
-                "secondary": [
-                    ("can't breathe", "dyspnea"),
-                    ("really tired", "fatigue"),
-                    ("aching all over", "myalgia")
-                ]
-            },
-            "copd": {
-                "primary": [
-                    ("can't catch my breath", "dyspnea"),
-                    ("coughing up stuff", "productive_cough"),
-                    ("wheezy", "wheezing"),
-                ],
-                "secondary": [
-                    ("really tired", "fatigue"),
-                    ("tight chest", "chest_tightness"),
-                    ("waking up short of breath", "orthopnea")
-                ]
-            },
-            "bronchitis": {
-                "primary": [
-                    ("hacking cough", "persistent_cough"),
-                    ("coughing up stuff", "productive_cough"),
-                    ("chest hurts from coughing", "chest_pain"),
-                ],
-                "secondary": [
-                    ("wheezy", "wheezing"),
-                    ("really tired", "fatigue"),
-                    ("stuffy nose", "nasal_congestion")
-                ]
-            }
-        }
-        
-        # Demographics for variation
-        age_groups = ["young adult", "middle-aged", "elderly", "child"]
-        durations = ["2 days", "a week", "3 hours", "yesterday", "this morning", "several weeks"]
-        severities = ["mild", "getting worse", "really bad", "unbearable"]
-        relations = ["kid", "mom", "dad", "partner", "friend", "grandparent"]
-        
-        conditions = list(condition_symptoms.keys())
-        
-        for i in range(max_posts):
-            # Choose condition and select appropriate symptoms
-            condition = random.choice(conditions)
-            symptoms_data = condition_symptoms[condition]
-            
-            # Select 2-4 symptoms (mostly primary, some secondary)
-            num_symptoms = random.randint(2, 4)
-            selected_symptoms = []
-            
-            # Always include at least one primary symptom
-            primary_symptom = random.choice(symptoms_data["primary"])
-            selected_symptoms.append(primary_symptom)
-            
-            # Add more symptoms
-            for _ in range(num_symptoms - 1):
-                if random.random() < 0.7:  # 70% chance of primary symptom
-                    available = [s for s in symptoms_data["primary"] if s not in selected_symptoms]
-                    if available:
-                        selected_symptoms.append(random.choice(available))
-                    else:
-                        available = [s for s in symptoms_data["secondary"] if s not in selected_symptoms]
-                        if available:
-                            selected_symptoms.append(random.choice(available))
-                else:
-                    available = [s for s in symptoms_data["secondary"] if s not in selected_symptoms]
-                    if available:
-                        selected_symptoms.append(random.choice(available))
-            
-            # Extract lay terms and medical terms
-            lay_terms = [s[0] for s in selected_symptoms]
-            medical_terms = [s[1] for s in selected_symptoms]
-            
-            # Build content with variation
-            main_symptom = lay_terms[0]
-            other_symptoms = lay_terms[1:] if len(lay_terms) > 1 else []
-            
-            # Choose template based on number of symptoms
-            if len(other_symptoms) == 0:
-                template = random.choice([
-                    "I've been {symptom} for {time} and I'm really worried. {detail}",
-                    "Does anyone else get {symptom}? It's been {time} and {severity}.",
-                    "My {relation} has {symptom}. Should we go to ER? {detail}"
-                ])
-                content = template.format(
-                    symptom=main_symptom,
-                    time=random.choice(durations),
-                    detail=random.choice(self._details),
-                    severity=random.choice(severities),
-                    relation=random.choice(relations)
-                )
-            elif len(other_symptoms) == 1:
-                template = random.choice([
-                    "Help! {symptom} and {other_symptom}. Started {time} ago.",
-                    "I've been {symptom} and also {other_symptom} for {time}. {detail}",
-                    "Been {symptom} since {time}, now {other_symptom} too. Getting {severity}."
-                ])
-                content = template.format(
-                    symptom=main_symptom,
-                    other_symptom=other_symptoms[0],
-                    time=random.choice(durations),
-                    detail=random.choice(self._details),
-                    severity=random.choice(severities)
-                )
-            else:
-                # Multiple symptoms
-                symptoms_list = ", ".join(other_symptoms[:-1]) + " and " + other_symptoms[-1]
-                template = random.choice([
-                    "I've been {symptom}, plus {other_symptoms}. Started {time} ago. {detail}",
-                    "{symptom} along with {other_symptoms}. This has been going on for {time}. {detail}",
-                    "Having {symptom}, {other_symptoms}. {time} now and {severity}."
-                ])
-                content = template.format(
-                    symptom=main_symptom,
-                    other_symptoms=symptoms_list,
-                    time=random.choice(durations),
-                    detail=random.choice(self._details),
-                    severity=random.choice(severities)
-                )
-            
-            # Add optional demographic hint
-            if random.random() < 0.3:  # 30% chance of adding age/context
-                age_context = [
-                    f"I'm {random.choice(age_groups)}.",
-                    f"Never had this before.",
-                    f"This is the worst it's been."
-                ]
-                content += " " + random.choice(age_context)
-            
-            post = ForumPost(
-                id=f"reddit_{i}",
-                title=f"Question about {main_symptom}",
-                content=content,
-                timestamp=datetime.now().isoformat(),
-                forum_source="reddit",
-                lay_terms=lay_terms,
-                extracted_symptoms=medical_terms,
-                confidence_score=random.uniform(0.7, 0.95)
-            )
-            posts.append(post)
-        
-        return posts
-    
-    def scrape_patient_info(self, max_posts: int = 10) -> List[ForumPost]:
-        """
-        Scrape posts from Patient.info forums (mock implementation).
-        
-        Args:
-            max_posts: Maximum number of posts to scrape
-            
-        Returns:
-            List of ForumPost objects
-        """
-        # Similar to Reddit but with slightly different phrasing
-        posts = self.scrape_reddit_health(max_posts)
-        for post in posts:
-            post.forum_source = "patient.info"
-            post.id = post.id.replace("reddit", "patientinfo")
-        return posts
-    
-    def save_posts(self, posts: List[ForumPost], filename: str) -> None:
-        """
-        Save posts to JSON file.
-        
-        Args:
-            posts: List of ForumPost objects
-            filename: Output filename
-        """
-        filepath = self.cache_dir / filename
-        with open(filepath, 'w') as f:
-            json.dump([asdict(post) for post in posts], f, indent=2)
-    
-    def load_posts(self, filename: str) -> List[ForumPost]:
-        """
-        Load posts from JSON file.
-        
-        Args:
-            filename: Input filename
-            
-        Returns:
-            List of ForumPost objects
-        """
-        filepath = self.cache_dir / filename
-        with open(filepath, 'r') as f:
-            data = json.load(f)
-        return [ForumPost(**post) for post in data]
-
-
 class LayLanguageMapper:
-    """
-    Maps between medical terminology and lay language.
-    """
-    
-    def __init__(self):
+    """Maps between medical terminology and lay language."""
+
+    def __init__(self) -> None:
         """Initialize with predefined mappings."""
-        # Predefined lay-to-medical mappings
         self.mappings = {
             "can't breathe": "dyspnea",
             "short of breath": "dyspnea",
@@ -310,211 +86,408 @@ class LayLanguageMapper:
             "dry cough": "dry_cough",
             "hot": "fever",
             "burning up": "fever",
-            "aching all over": "myalgia"
+            "aching all over": "myalgia",
         }
-        
-        # Build reverse mapping
         self._build_reverse_mapping()
-    
+
     def _build_reverse_mapping(self) -> None:
-        """Build medical-to-lay reverse mapping."""
-        self.reverse_mappings = {}
+        self.reverse_mappings: Dict[str, List[str]] = {}
         for lay, medical in self.mappings.items():
-            if medical not in self.reverse_mappings:
-                self.reverse_mappings[medical] = []
-            self.reverse_mappings[medical].append(lay)
-    
+            self.reverse_mappings.setdefault(medical, []).append(lay)
+
     def get_medical_term(self, lay_term: str) -> Optional[str]:
-        """
-        Get medical term for a lay term.
-        
-        Args:
-            lay_term: Lay language term
-            
-        Returns:
-            Medical term or None if not found
-        """
         return self.mappings.get(lay_term.lower())
-    
+
     def get_lay_terms_for_medical(self, medical_term: str) -> List[str]:
-        """
-        Get lay terms for a medical term.
-        
-        Args:
-            medical_term: Medical terminology
-            
-        Returns:
-            List of lay terms
-        """
         return self.reverse_mappings.get(medical_term, [])
-    
-    def update_mappings_from_posts(self, posts: List[ForumPost]) -> None:
-        """
-        Update mappings based on forum posts.
-        
-        Args:
-            posts: List of forum posts with extracted terms
-        """
+
+    def update_mappings_from_posts(self, posts: Sequence[ForumPost]) -> None:
         for post in posts:
             for lay_term, medical_term in zip(post.lay_terms, post.extracted_symptoms):
                 if lay_term.lower() not in self.mappings:
                     self.mappings[lay_term.lower()] = medical_term
-        
-        # Rebuild reverse mapping
         self._build_reverse_mapping()
-    
+
     def save_mappings(self, filepath: str) -> None:
-        """
-        Save mappings to JSON file.
-        
-        Args:
-            filepath: Output file path
-        """
-        with open(filepath, 'w') as f:
-            json.dump(self.mappings, f, indent=2)
-    
+        with open(filepath, "w", encoding="utf-8") as handle:
+            json.dump(self.mappings, handle, indent=2)
+
     def load_mappings(self, filepath: str) -> None:
-        """
-        Load mappings from JSON file.
-        
-        Args:
-            filepath: Input file path
-        """
-        with open(filepath, 'r') as f:
-            self.mappings = json.load(f)
+        with open(filepath, "r", encoding="utf-8") as handle:
+            self.mappings = json.load(handle)
         self._build_reverse_mapping()
+
+
+class RateLimiter:
+    """Simple time based rate limiter used by the HTTP/API clients."""
+
+    def __init__(self, min_interval_seconds: float) -> None:
+        self.min_interval_seconds = max(min_interval_seconds, 0.0)
+        self._last_invocation: float = 0.0
+
+    def wait(self) -> None:
+        """Sleep if the previous invocation happened too recently."""
+        if self.min_interval_seconds <= 0:
+            return
+        elapsed = time.monotonic() - self._last_invocation
+        remaining = self.min_interval_seconds - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
+        self._last_invocation = time.monotonic()
+
+
+class BaseForumClient:
+    """Interface for forum clients."""
+
+    def fetch_posts(self, max_posts: int) -> List[Dict[str, Any]]:  # pragma: no cover - interface
+        raise NotImplementedError
+
+
+class RedditClient(BaseForumClient):
+    """Client that fetches posts from Reddit using :mod:`praw`."""
+
+    def __init__(
+        self,
+        subreddit: str = "AskDocs",
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        rate_limit_seconds: float = 1.0,
+        praw_client: Optional[Any] = None,
+    ) -> None:
+        if praw_client is not None:
+            self._reddit = praw_client
+        else:
+            if praw is None:  # pragma: no cover - depends on optional dependency
+                raise RuntimeError(
+                    "praw is required to scrape Reddit. Install the optional dependency "
+                    "and provide API credentials via the ForumScraper configuration."
+                )
+
+            client_id = client_id or os.getenv("REDDIT_CLIENT_ID")
+            client_secret = client_secret or os.getenv("REDDIT_CLIENT_SECRET")
+            user_agent = user_agent or os.getenv("REDDIT_USER_AGENT")
+            username = username or os.getenv("REDDIT_USERNAME")
+            password = password or os.getenv("REDDIT_PASSWORD")
+
+            missing = [
+                ("REDDIT_CLIENT_ID", client_id),
+                ("REDDIT_CLIENT_SECRET", client_secret),
+                ("REDDIT_USER_AGENT", user_agent),
+            ]
+            missing_keys = [name for name, value in missing if not value]
+            if missing_keys:
+                raise RuntimeError(
+                    "Missing Reddit API credentials: " + ", ".join(missing_keys)
+                )
+
+            self._reddit = praw.Reddit(  # type: ignore[call-arg]
+                client_id=client_id,
+                client_secret=client_secret,
+                user_agent=user_agent,
+                username=username,
+                password=password,
+                check_for_async=False,
+            )
+
+        self.subreddit = subreddit
+        self._rate_limiter = RateLimiter(rate_limit_seconds)
+
+    def fetch_posts(self, max_posts: int) -> List[Dict[str, Any]]:
+        """Fetch posts from the configured subreddit."""
+
+        posts: List[Dict[str, Any]] = []
+        subreddit = self._reddit.subreddit(self.subreddit)
+
+        for submission in subreddit.hot(limit=max_posts * 2):
+            # Honour rate limits and avoid stickied announcements.
+            self._rate_limiter.wait()
+            if getattr(submission, "stickied", False):
+                continue
+
+            created = getattr(submission, "created_utc", None)
+            created_dt = (
+                datetime.utcfromtimestamp(created)
+                if created is not None
+                else datetime.utcnow()
+            )
+
+            posts.append(
+                {
+                    "id": str(submission.id),
+                    "title": submission.title or "",
+                    "content": submission.selftext or submission.title or "",
+                    "created_at": created_dt,
+                }
+            )
+
+            if len(posts) >= max_posts:
+                break
+
+        logger.debug("Fetched %s Reddit posts", len(posts))
+        return posts
+
+
+class PatientInfoClient(BaseForumClient):
+    """Client that scrapes Patient.info forum listings using :mod:`requests`."""
+
+    def __init__(
+        self,
+        forum_paths: Optional[Sequence[str]] = None,
+        base_url: str = "https://patient.info/forums",
+        session: Optional[Any] = None,
+        rate_limit_seconds: float = 1.0,
+    ) -> None:
+        if requests is None or BeautifulSoup is None:  # pragma: no cover - optional deps
+            raise RuntimeError(
+                "requests and beautifulsoup4 are required to scrape Patient.info."
+            )
+
+        self.base_url = base_url.rstrip("/")
+        self.forum_paths = list(forum_paths or ["/forums/categories/asthma"])
+        self.session = session or requests.Session()
+        self._rate_limiter = RateLimiter(rate_limit_seconds)
+
+    def fetch_posts(self, max_posts: int) -> List[Dict[str, Any]]:
+        """Fetch thread previews from the configured Patient.info forums."""
+
+        records: List[Dict[str, Any]] = []
+        for path in self.forum_paths:
+            if len(records) >= max_posts:
+                break
+
+            url = f"{self.base_url}/{path.lstrip('/')}"
+            self._rate_limiter.wait()
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            html = response.text
+            records.extend(self._parse_thread_list(html))
+
+        logger.debug("Fetched %s Patient.info posts", len(records))
+        return records[:max_posts]
+
+    @staticmethod
+    def _parse_thread_list(html: str) -> List[Dict[str, Any]]:
+        soup = BeautifulSoup(html, "html.parser")
+        threads: List[Dict[str, Any]] = []
+
+        for article in soup.select("[data-thread-id], article.thread"):
+            thread_id = article.get("data-thread-id") or article.get("id")
+            title_el = article.select_one("a[data-thread-title], h2 a, a.thread-link")
+            summary_el = article.select_one(
+                "[data-thread-excerpt], p, .thread-excerpt, .message"
+            )
+            time_el = article.find("time")
+
+            title = (title_el.get_text(strip=True) if title_el else "").strip()
+            summary = (summary_el.get_text(" ", strip=True) if summary_el else "").strip()
+            timestamp = datetime.utcnow()
+            if time_el and time_el.has_attr("datetime"):
+                timestamp = _parse_datetime(time_el["datetime"]) or timestamp
+
+            if not summary:
+                summary = title
+
+            if title or summary:
+                threads.append(
+                    {
+                        "id": thread_id or title or summary,
+                        "title": title,
+                        "content": summary,
+                        "created_at": timestamp,
+                    }
+                )
+
+        return threads
+
+
+def _parse_datetime(value: str) -> Optional[datetime]:
+    """Parse ISO-like datetime strings safely."""
+
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+class ForumScraper:
+    """Scrapes health forums for lay language examples."""
+
+    def __init__(
+        self,
+        cache_dir: Optional[str] = None,
+        reddit_client: Optional[BaseForumClient] = None,
+        patient_info_client: Optional[BaseForumClient] = None,
+        mapper: Optional[LayLanguageMapper] = None,
+    ) -> None:
+        self.cache_dir = Path(cache_dir) if cache_dir else Path("forum_data")
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        self._reddit_client = reddit_client
+        self._patient_info_client = patient_info_client
+        self.mapper = mapper or LayLanguageMapper()
+
+    def _normalise_posts(self, records: Iterable[Dict[str, Any]], source: str) -> List[ForumPost]:
+        posts: List[ForumPost] = []
+        for record in records:
+            content = (record.get("content") or "").strip()
+            title = (record.get("title") or "").strip()
+            created_at = record.get("created_at")
+            if isinstance(created_at, datetime):
+                timestamp = created_at.isoformat()
+            else:
+                timestamp = str(created_at or datetime.utcnow().isoformat())
+
+            lay_terms, medical_terms = self._extract_terms(content)
+            confidence = self._estimate_confidence(lay_terms, content)
+
+            posts.append(
+                ForumPost(
+                    id=str(record.get("id")),
+                    title=title,
+                    content=content,
+                    timestamp=timestamp,
+                    forum_source=source,
+                    lay_terms=lay_terms,
+                    extracted_symptoms=medical_terms,
+                    confidence_score=confidence,
+                )
+            )
+        return posts
+
+    def _extract_terms(self, content: str) -> Tuple[List[str], List[str]]:
+        lay_terms: List[str] = []
+        medical_terms: List[str] = []
+        lowered = content.lower()
+        for lay, medical in self.mapper.mappings.items():
+            if lay in lowered:
+                lay_terms.append(lay)
+                medical_terms.append(medical)
+        return lay_terms, medical_terms
+
+    @staticmethod
+    def _estimate_confidence(lay_terms: Sequence[str], content: str) -> float:
+        if not lay_terms:
+            return 0.3
+        diversity = len(set(lay_terms))
+        base = 0.5 + 0.1 * min(diversity, 3)
+        length_factor = min(len(content) / 500.0, 0.5)
+        return round(min(base + length_factor, 0.95), 2)
+
+    def _get_reddit_client(self) -> BaseForumClient:
+        if self._reddit_client is None:
+            self._reddit_client = RedditClient()
+        return self._reddit_client
+
+    def _get_patient_info_client(self) -> BaseForumClient:
+        if self._patient_info_client is None:
+            self._patient_info_client = PatientInfoClient()
+        return self._patient_info_client
+
+    def scrape_reddit_health(self, max_posts: int = 10) -> List[ForumPost]:
+        records = self._get_reddit_client().fetch_posts(max_posts)
+        return self._normalise_posts(records, "reddit")
+
+    def scrape_patient_info(self, max_posts: int = 10) -> List[ForumPost]:
+        records = self._get_patient_info_client().fetch_posts(max_posts)
+        return self._normalise_posts(records, "patient.info")
+
+    def save_posts(self, posts: Sequence[ForumPost], filename: str) -> None:
+        filepath = self.cache_dir / filename
+        with open(filepath, "w", encoding="utf-8") as handle:
+            json.dump([asdict(post) for post in posts], handle, indent=2)
+        logger.info("Saved %s posts to %s", len(posts), filepath)
+
+    def load_posts(self, filename: str) -> List[ForumPost]:
+        filepath = self.cache_dir / filename
+        with open(filepath, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return [ForumPost(**post) for post in data]
 
 
 class ForumDataAugmentation:
-    """
-    Augments medical complaints with forum-derived lay language.
-    """
-    
-    def __init__(self, mapper: Optional[LayLanguageMapper] = None):
-        """
-        Initialize data augmentation.
-        
-        Args:
-            mapper: LayLanguageMapper instance
-        """
+    """Augments medical complaints with forum-derived lay language."""
+
+    def __init__(
+        self,
+        mapper: Optional[LayLanguageMapper] = None,
+        forum_posts: Optional[Sequence[ForumPost]] = None,
+        scraper: Optional[ForumScraper] = None,
+    ) -> None:
         self.mapper = mapper or LayLanguageMapper()
-        self._forum_complaints = self._generate_mock_forum_complaints()
-    
-    def _generate_mock_forum_complaints(self) -> List[str]:
-        """Generate mock forum-style complaints with condition-specific symptoms."""
+        self.scraper = scraper
+        self._forum_posts: List[ForumPost] = list(forum_posts or [])
+
+    def update_forum_posts(self, posts: Sequence[ForumPost]) -> None:
+        self._forum_posts = list(posts)
+        if posts:
+            self.mapper.update_mappings_from_posts(posts)
+
+    def augment_complaints_with_lay_terms(
+        self, complaints: Sequence[str], condition_codes: Sequence[str]
+    ) -> List[str]:
+        augmented: List[str] = []
+        for complaint in complaints:
+            augmented_complaint = complaint
+            for medical, lay_terms in self.mapper.reverse_mappings.items():
+                normalized_medical = medical.replace("_", " ")
+                if normalized_medical in augmented_complaint.lower():
+                    lay_term = lay_terms[0]
+                    augmented_complaint = augmented_complaint.replace(
+                        normalized_medical, lay_term
+                    )
+            augmented.append(augmented_complaint)
+        return augmented
+
+    def get_forum_complaints_for_pretraining(
+        self, max_complaints: int = 100
+    ) -> List[str]:
+        if not self._forum_posts and self.scraper is not None:
+            try:
+                self._forum_posts = self.scraper.load_posts("reddit_posts.json")
+            except FileNotFoundError:
+                logger.debug("No cached forum data available for augmentation")
+
+        if self._forum_posts:
+            return [post.content for post in self._forum_posts[:max_complaints]]
+
+        # Fallback to synthetic complaints if no real data has been harvested yet.
+        return self._generate_mock_forum_complaints(max_complaints)
+
+    def _generate_mock_forum_complaints(self, max_samples: int) -> List[str]:
         templates = [
             "I've been {lay1} and {lay2} for days now",
             "Can't stop {lay1}, also have {lay2}",
             "Really worried about {lay1} and {lay2}",
             "Help! {lay1} and getting worse",
-            "My {lay1} won't go away, also {lay2}",
             "Been {lay1} since yesterday, now {lay2} too",
             "Having {lay1}, plus {lay2}. Getting scared.",
-            "{lay1} and {lay2}. Should I go to doctor?",
-            "Anyone else with {lay1}? I also have {lay2}",
-            "{lay1} is driving me crazy. {lay2} started today."
         ]
-        
-        # Group symptoms by related conditions for more realistic combinations
-        symptom_groups = [
-            # Respiratory/breathing issues
-            ["can't breathe", "wheezy", "tight chest", "gasping for air", "short of breath"],
-            # Cough-related
-            ["coughing up stuff", "hacking cough", "dry cough", "chest hurts"],
-            # Fever/infection
-            ["burning up", "really tired", "aching all over", "exhausted"],
-            # Upper respiratory
-            ["stuffy nose", "scratchy throat", "blocked nose", "throat hurts"]
-        ]
-        
-        complaints = []
-        
-        for _ in range(50):
-            template = random.choice(templates)
-            
-            # 70% chance to pick from same symptom group (realistic combination)
-            # 30% chance to mix groups (also realistic but less common)
-            if random.random() < 0.7:
-                symptom_group = random.choice(symptom_groups)
-                if len(symptom_group) >= 2:
-                    lay1, lay2 = random.sample(symptom_group, 2)
-                else:
-                    lay1 = random.choice(symptom_group)
-                    lay2 = random.choice([t for group in symptom_groups for t in group if t != lay1])
-            else:
-                # Mix from different groups
-                group1 = random.choice(symptom_groups)
-                group2 = random.choice([g for g in symptom_groups if g != group1])
-                lay1 = random.choice(group1)
-                lay2 = random.choice(group2)
-            
-            complaint = template.format(lay1=lay1, lay2=lay2)
-            
-            # Fix grammar for action verbs
-            if "Can't stop can't" in complaint:
-                complaint = complaint.replace("Can't stop can't", "Can't")
-            if "Having can't" in complaint:
-                complaint = complaint.replace("Having can't", "Can't")
-            
-            complaints.append(complaint)
-        
+        symptoms = list(self.mapper.mappings.keys())
+        complaints: List[str] = []
+        for idx in range(min(max_samples, len(symptoms))):
+            lay1 = symptoms[idx % len(symptoms)]
+            lay2 = symptoms[(idx + 7) % len(symptoms)]
+            template = templates[idx % len(templates)]
+            complaints.append(template.format(lay1=lay1, lay2=lay2))
         return complaints
-    
-    def augment_complaints_with_lay_terms(
-        self, 
-        complaints: List[str], 
-        condition_codes: List[str]
-    ) -> List[str]:
-        """
-        Augment medical complaints with lay language.
-        
-        Args:
-            complaints: List of medical complaints
-            condition_codes: Corresponding ICD-10 codes
-            
-        Returns:
-            List of augmented complaints
-        """
-        augmented = []
-        
-        for complaint in complaints:
-            # Replace medical terms with lay terms
-            augmented_complaint = complaint
-            for medical, lay_list in self.mapper.reverse_mappings.items():
-                if medical.replace('_', ' ') in augmented_complaint.lower():
-                    lay_term = random.choice(lay_list)
-                    augmented_complaint = augmented_complaint.replace(
-                        medical.replace('_', ' '), 
-                        lay_term
-                    )
-            augmented.append(augmented_complaint)
-        
-        return augmented
-    
-    def get_forum_complaints_for_pretraining(self, max_complaints: int = 100) -> List[str]:
-        """
-        Get forum complaints for pretraining.
-        
-        Args:
-            max_complaints: Maximum number of complaints
-            
-        Returns:
-            List of forum-style complaints
-        """
-        return self._forum_complaints[:max_complaints]
 
 
-# Convenience functions
+# Convenience factory helpers -------------------------------------------------
+
 def create_forum_scraper(cache_dir: Optional[str] = None) -> ForumScraper:
-    """Create a ForumScraper instance."""
     return ForumScraper(cache_dir=cache_dir)
 
 
 def create_lay_language_mapper() -> LayLanguageMapper:
-    """Create a LayLanguageMapper instance."""
     return LayLanguageMapper()
 
 
-def create_data_augmentation(mapper: Optional[LayLanguageMapper] = None) -> ForumDataAugmentation:
-    """Create a ForumDataAugmentation instance."""
-    return ForumDataAugmentation(mapper=mapper)
+def create_data_augmentation(
+    mapper: Optional[LayLanguageMapper] = None,
+    forum_posts: Optional[Sequence[ForumPost]] = None,
+    scraper: Optional[ForumScraper] = None,
+) -> ForumDataAugmentation:
+    return ForumDataAugmentation(mapper=mapper, forum_posts=forum_posts, scraper=scraper)

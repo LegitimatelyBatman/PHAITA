@@ -1,0 +1,20 @@
+[
+  {
+    "id": "abc123",
+    "title": "Can't catch my breath at night",
+    "content": "Middle aged patient who can't breathe when lying down, also wheezy and really tired.",
+    "created_at": "2024-03-05T21:00:00Z"
+  },
+  {
+    "id": "def456",
+    "title": "Severe coughing fits",
+    "content": "Been coughing up stuff for a week and my chest hurts badly. Also feeling burning up lately.",
+    "created_at": "2024-02-18T09:30:00Z"
+  },
+  {
+    "id": "ghi789",
+    "title": "Child wheezing and tight chest",
+    "content": "My child is wheezy with a tight chest and can't catch their breath when running.",
+    "created_at": "2024-01-12T16:15:00Z"
+  }
+]

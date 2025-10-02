@@ -46,6 +46,32 @@ python cli.py train --epochs 50 --batch-size 16
 python cli.py diagnose --complaint "I can't catch my breath"
 ```
 
+### Forum scraping
+Real forum data is now harvested on-demand via `scripts/scrape_forums.py`. The
+Reddit client uses OAuth credentials which must be supplied via environment
+variables or command-line arguments in your own wrapper scripts.
+
+```bash
+# Required for Reddit scraping
+export REDDIT_CLIENT_ID="..."
+export REDDIT_CLIENT_SECRET="..."
+export REDDIT_USER_AGENT="phaita-dev/0.1"
+
+# Optional: authenticate as a specific user for private subreddit access
+export REDDIT_USERNAME="..."
+export REDDIT_PASSWORD="..."
+
+# Scrape both Reddit and Patient.info forums and persist to forum_data/
+python scripts/scrape_forums.py --source all --max-posts 50
+
+# Scrape Reddit only into a custom cache directory
+python scripts/scrape_forums.py --source reddit --cache-dir .cache/forums
+```
+
+The scraper overwrites cached JSON exports each run so downstream components
+always consume fresh data. Patient.info scraping relies on standard HTTP
+requests and respects a modest rate-limit by default.
+
 ### Python API Example
 ```python
 from phaita import AdversarialTrainer
