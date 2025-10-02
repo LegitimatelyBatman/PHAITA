@@ -10,6 +10,7 @@ import os
 import random
 import sys
 import textwrap
+from functools import lru_cache
 from pathlib import Path
 
 # Add the package to Python path
@@ -55,6 +56,20 @@ def setup_logging(verbose: bool = False):
             logging.FileHandler('phaita.log')
         ]
     )
+
+
+@lru_cache(maxsize=1)
+def _get_complaint_generator() -> ComplaintGenerator:
+    """Return a cached complaint generator instance."""
+    return ComplaintGenerator()
+
+
+@lru_cache(maxsize=1)
+def _get_diagnosis_discriminator() -> DiagnosisDiscriminator:
+    """Return a cached diagnosis discriminator instance."""
+    model = DiagnosisDiscriminator()
+    model.eval()
+    return model
 
 
 def train_command(args):
@@ -263,54 +278,108 @@ def diagnose_command(args):
     """Test discriminator on user-provided complaint."""
     print("🩺 PHAITA Diagnosis Tool")
     print("=" * 40)
-    
+
     try:
+        discriminator = _get_diagnosis_discriminator()
+
+        def run_diagnosis(input_complaint: str):
+            """Execute model prediction with graceful fallback."""
+            try:
+                code, confidence, explanation = discriminator.predict_with_explanation(input_complaint)
+                top_predictions = explanation.get("top_3_predictions", [])
+            except AttributeError:
+                predictions = discriminator.predict_diagnosis([input_complaint], top_k=3)
+                ranked = predictions[0] if predictions else []
+                if ranked:
+                    top_entry = ranked[0]
+                    code = top_entry.get("condition_code", "UNKNOWN")
+                    confidence = top_entry.get("probability", 0.0)
+                else:
+                    code = "UNKNOWN"
+                    confidence = 0.0
+                top_predictions = [
+                    (
+                        entry.get("condition_code", "UNKNOWN"),
+                        entry.get("probability", 0.0)
+                    )
+                    for entry in ranked
+                ]
+                condition_info = RespiratoryConditions.get_condition_by_code(code)
+                explanation = {
+                    "condition_code": code,
+                    "condition_name": condition_info.get("name") if condition_info else code,
+                    "confidence": confidence,
+                    "matched_keywords": [],
+                    "reasoning": "Model prediction via predict_diagnosis",
+                    "top_3_predictions": top_predictions,
+                }
+
+            return code, confidence, explanation, top_predictions
+
         # Get user input
         if args.complaint:
             complaint = args.complaint
         else:
             print("Enter a patient complaint (or 'quit' to exit):")
             complaint = input("> ").strip()
-            
+
             if complaint.lower() in ['quit', 'exit', 'q']:
                 return
-        
+
         if not complaint:
             print("❌ No complaint provided")
             return
-        
+
         print(f"\n📝 Analyzing complaint: \"{complaint}\"")
-        
-        # Simple mock diagnosis based on keywords
-        diagnosis_result = _mock_diagnosis(complaint)
-        
+
+        code, confidence, explanation, top_predictions = run_diagnosis(complaint)
+
         print(f"\n🔍 Diagnosis Results:")
-        print(f"   Primary Diagnosis: {diagnosis_result['primary_diagnosis']}")
-        print(f"   Confidence: {diagnosis_result['confidence']:.3f}")
-        print(f"   Secondary Conditions: {', '.join(diagnosis_result['secondary'])}")
-        
-        # Show realism analysis
+        condition_name = explanation.get("condition_name") or code
+        print(f"   Primary Diagnosis: {condition_name} ({code})")
+        print(f"   Confidence: {confidence:.3f}")
+
+        secondary_conditions = [
+            f"{pred_code} ({prob:.3f})" if isinstance(prob, (int, float)) else pred_code
+            for pred_code, prob in top_predictions
+            if pred_code != code
+        ]
+        if secondary_conditions:
+            print(f"   Secondary Conditions: {', '.join(secondary_conditions)}")
+        else:
+            print("   Secondary Conditions: None")
+
         if args.detailed:
             print(f"\n📊 Detailed Analysis:")
-            print(f"   Medical Relevance: {diagnosis_result['medical_relevance']:.3f}")
-            print(f"   Symptom Clarity: {diagnosis_result['symptom_clarity']:.3f}")
-            print(f"   Language Pattern: {diagnosis_result['language_pattern']}")
-            print(f"   Detected Symptoms: {', '.join(diagnosis_result['detected_symptoms'])}")
-        
-        # Interactive mode
+            matched_keywords = explanation.get("matched_keywords", [])
+            if matched_keywords:
+                print(f"   Matched Keywords: {', '.join(matched_keywords)}")
+            reasoning = explanation.get("reasoning")
+            if reasoning:
+                print(f"   Reasoning: {reasoning}")
+
+            if top_predictions:
+                print("   Differential Ranking:")
+                for rank, (pred_code, prob) in enumerate(top_predictions, start=1):
+                    display_prob = f"{prob:.3f}" if isinstance(prob, (int, float)) else prob
+                    print(f"      {rank}. {pred_code} - {display_prob}")
+
         if args.interactive:
             while True:
                 print("\n" + "=" * 40)
                 print("Enter another complaint (or 'quit' to exit):")
                 new_complaint = input("> ").strip()
-                
+
                 if new_complaint.lower() in ['quit', 'exit', 'q']:
                     break
-                
+
                 if new_complaint:
-                    result = _mock_diagnosis(new_complaint)
-                    print(f"\n🔍 Diagnosis: {result['primary_diagnosis']} (confidence: {result['confidence']:.3f})")
-    
+                    new_code, new_confidence, _, _ = run_diagnosis(new_complaint)
+                    print(
+                        f"\n🔍 Diagnosis: {new_code} "
+                        f"(confidence: {new_confidence:.3f})"
+                    )
+
     except Exception as e:
         print(f"❌ Error in diagnosis: {e}")
 
@@ -410,113 +479,88 @@ def challenge_command(args):
         
         # Test discriminator on challenging cases
         print(f"\n🧪 Testing Discriminator Performance...")
-        total_cases = len(challenge_cases)
-        correct_diagnoses = 0
-        
+        discriminator = _get_diagnosis_discriminator()
+        complaint_generator = _get_complaint_generator()
+        evaluated_cases = []
+
         for i, case in enumerate(challenge_cases):
-            # Generate mock complaint from symptoms
-            complaint = _generate_complaint_from_symptoms(case["symptoms"], case.get("metadata", {}))
-            
-            # Mock diagnosis
-            diagnosis_result = _mock_diagnosis(complaint)
-            predicted_condition = diagnosis_result["primary_diagnosis"]
-            
-            # Check if correct (simplified)
-            is_correct = _is_diagnosis_correct(case["condition"], predicted_condition)
-            
-            if is_correct:
-                correct_diagnoses += 1
-                status = "✅ CORRECT"
+            try:
+                complaint = complaint_generator.generate_complaint(case["symptoms"], case["condition"])
+            except Exception:
+                complaint = _generate_complaint_from_symptoms(case["symptoms"], case.get("metadata", {}))
+
+            predictions_batch = discriminator.predict_diagnosis([complaint], top_k=3)
+            ranked_predictions = predictions_batch[0] if predictions_batch else []
+
+            if ranked_predictions:
+                top_entry = ranked_predictions[0]
+                predicted_condition = top_entry.get("condition_code", "UNKNOWN")
+                confidence = top_entry.get("probability", 0.0)
             else:
-                status = "❌ INCORRECT"
-            
+                predicted_condition = "UNKNOWN"
+                confidence = 0.0
+
+            is_correct = _is_diagnosis_correct(case["condition"], predicted_condition)
+
+            evaluated_cases.append({
+                **case,
+                "complaint": complaint,
+                "predictions": ranked_predictions,
+                "predicted_condition": predicted_condition,
+                "confidence": confidence,
+                "is_correct": is_correct,
+            })
+
+            status = "✅ CORRECT" if is_correct else "❌ INCORRECT"
+            total_cases = len(challenge_cases)
             print(f"   Case {i+1}/{total_cases}: {status}")
-            
+
             if args.verbose:
                 print(f"      Complaint: \"{complaint[:60]}...\"")
                 print(f"      True: {case['condition']}, Predicted: {predicted_condition}")
-                print(f"      Confidence: {diagnosis_result['confidence']:.3f}")
-        
-        # Summary
+                print(f"      Confidence: {confidence:.3f}")
+                if ranked_predictions:
+                    top_summary = ", ".join(
+                        f"{entry.get('condition_code', 'UNKNOWN')}"
+                        f" ({entry.get('probability', 0.0):.3f})"
+                        for entry in ranked_predictions[:3]
+                    )
+                    print(f"      Top predictions: {top_summary}")
+
+        total_cases = len(evaluated_cases)
+        correct_diagnoses = sum(1 for case in evaluated_cases if case["is_correct"])
         accuracy = correct_diagnoses / total_cases if total_cases > 0 else 0.0
         print(f"\n📊 Challenge Results:")
         print(f"   Total Cases: {total_cases}")
         print(f"   Correct Diagnoses: {correct_diagnoses}")
         print(f"   Accuracy: {accuracy:.1%}")
-        
+
         if accuracy < 0.6:
             print("   🚨 Performance below threshold - model needs improvement")
         elif accuracy < 0.8:
             print("   ⚠️  Moderate performance - room for improvement")
         else:
             print("   🎉 Good performance on adversarial challenges")
-        
-        # Show hardest cases
+
         if args.show_failures and correct_diagnoses < total_cases:
             print(f"\n🔍 Most Challenging Cases:")
-            failure_count = 0
-            for i, case in enumerate(challenge_cases):
-                complaint = _generate_complaint_from_symptoms(case["symptoms"], case.get("metadata", {}))
-                diagnosis_result = _mock_diagnosis(complaint)
-                
-                if not _is_diagnosis_correct(case["condition"], diagnosis_result["primary_diagnosis"]):
-                    failure_count += 1
-                    if failure_count <= 3:  # Show top 3 failures
-                        print(f"   {failure_count}. Type: {case['type']}")
-                        print(f"      Complaint: \"{complaint}\"")
-                        print(f"      Expected: {case['condition']}, Got: {diagnosis_result['primary_diagnosis']}")
+            failure_cases = [case for case in evaluated_cases if not case["is_correct"]][:3]
+            for idx, case in enumerate(failure_cases, start=1):
+                print(f"   {idx}. Type: {case['type']}")
+                print(f"      Complaint: \"{case['complaint']}\"")
+                print(f"      Expected: {case['condition']}, Got: {case['predicted_condition']}")
+                if case["predictions"]:
+                    top_summary = ", ".join(
+                        f"{entry.get('condition_code', 'UNKNOWN')}"
+                        f" ({entry.get('probability', 0.0):.3f})"
+                        for entry in case["predictions"][:3]
+                    )
+                    print(f"      Model Ranking: {top_summary}")
     
     except Exception as e:
         print(f"❌ Error in challenge mode: {e}")
         import traceback
         traceback.print_exc()
-
-
-def _mock_diagnosis(complaint: str) -> dict:
-    """Mock diagnosis function for testing."""
-    complaint_lower = complaint.lower()
-    
-    # Simple keyword-based diagnosis
-    if any(word in complaint_lower for word in ['wheez', 'asthma', 'tight']):
-        primary = "J45.9"
-        confidence = 0.85
-    elif any(word in complaint_lower for word in ['copd', 'chronic', 'smok']):
-        primary = "J44.1" 
-        confidence = 0.80
-    elif any(word in complaint_lower for word in ['fever', 'pneumonia', 'chill']):
-        primary = "J18.9"
-        confidence = 0.75
-    elif any(word in complaint_lower for word in ['cold', 'stuffy', 'sore throat']):
-        primary = "J06.9"
-        confidence = 0.70
-    else:
-        primary = "R06.02"  # Generic shortness of breath
-        confidence = 0.60
-    
-    # Extract symptoms
-    detected_symptoms = []
-    symptom_keywords = {
-        'wheezing': ['wheez'],
-        'shortness of breath': ['breath', 'air', 'suffocate'],
-        'chest pain': ['chest', 'pain', 'hurt'],
-        'cough': ['cough'],
-        'fever': ['fever', 'hot', 'burn'],
-        'fatigue': ['tired', 'exhaust', 'weak']
-    }
-    
-    for symptom, keywords in symptom_keywords.items():
-        if any(keyword in complaint_lower for keyword in keywords):
-            detected_symptoms.append(symptom)
-    
-    return {
-        "primary_diagnosis": primary,
-        "confidence": confidence,
-        "secondary": ["R06.02"] if primary != "R06.02" else [],
-        "medical_relevance": random.uniform(0.6, 0.9),
-        "symptom_clarity": random.uniform(0.5, 0.9),
-        "language_pattern": "patient_language",
-        "detected_symptoms": detected_symptoms
-    }
 
 
 def _generate_complaint_from_symptoms(symptoms: list, metadata: dict) -> str:
