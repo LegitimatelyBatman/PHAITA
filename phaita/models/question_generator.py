@@ -1,6 +1,7 @@
 """
 Interactive question generator for medical triage.
-Uses Mistral-7B for dynamic question generation with template fallback.
+Uses Mistral-7B for dynamic question generation.
+Requires transformers and bitsandbytes to be properly installed.
 """
 
 from typing import List, Optional, Dict, Set
@@ -8,29 +9,39 @@ import random
 import torch
 import torch.nn as nn
 
+# Enforce required dependencies
 try:
     from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
+except ImportError as e:
+    raise ImportError(
+        "transformers is required for QuestionGenerator. "
+        "Install with: pip install transformers==4.46.0\n"
+        "GPU Requirements: CUDA-capable GPU with 4GB+ VRAM recommended for full functionality. "
+        "CPU-only mode available but slower."
+    ) from e
 
 try:
     import bitsandbytes
-    BITSANDBYTES_AVAILABLE = True
-except ImportError:
-    BITSANDBYTES_AVAILABLE = False
+except ImportError as e:
+    raise ImportError(
+        "bitsandbytes is required for 4-bit quantization in QuestionGenerator. "
+        "Install with: pip install bitsandbytes==0.44.1\n"
+        "Note: bitsandbytes requires CUDA. For CPU-only systems, this dependency must still be "
+        "installed but use_4bit=False should be passed to the model."
+    ) from e
 
 
 class QuestionGenerator(nn.Module):
     """
     Generates clarifying questions for interactive triage.
-    Uses LLM when available, falls back to templates.
+    Uses Mistral-7B with 4-bit quantization.
+    Requires transformers and bitsandbytes to be installed.
     """
     
     def __init__(
         self,
         model_name: str = "mistralai/Mistral-7B-Instruct-v0.2",
-        use_pretrained: bool = False,  # Default False to avoid loading large model
+        use_pretrained: bool = True,
         use_4bit: bool = True,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
@@ -41,97 +52,87 @@ class QuestionGenerator(nn.Module):
         
         Args:
             model_name: Name of the LLM to use
-            use_pretrained: Whether to load pretrained LLM
-            use_4bit: Whether to use 4-bit quantization
+            use_pretrained: Whether to load pretrained LLM (must be True)
+            use_4bit: Whether to use 4-bit quantization (requires CUDA)
             max_new_tokens: Maximum tokens to generate
             temperature: Sampling temperature
             device: Device to load model on
+        
+        Raises:
+            ValueError: If use_pretrained is False
+            RuntimeError: If model loading fails
         """
         super().__init__()
         
-        self.use_llm = use_pretrained and TRANSFORMERS_AVAILABLE
+        if not use_pretrained:
+            raise ValueError(
+                "QuestionGenerator requires use_pretrained=True. "
+                "Template-based fallback has been removed. "
+                "Ensure transformers and bitsandbytes are properly installed."
+            )
+        
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.default_candidate_pool_size = 3
         
-        # Try to load LLM
-        if self.use_llm:
-            try:
-                self._load_llm(model_name, use_4bit)
-            except Exception as e:
-                print(f"Warning: Could not load LLM for questions: {e}")
-                print("Falling back to template-based questions")
-                self.use_llm = False
-                self._init_template_generator()
-        else:
-            self._init_template_generator()
+        # Load LLM
+        self._load_llm(model_name, use_4bit)
     
     def _load_llm(self, model_name: str, use_4bit: bool):
-        """Load the language model."""
-        print(f"Loading {model_name} for question generation...")
+        """
+        Load the language model.
         
-        if use_4bit and BITSANDBYTES_AVAILABLE and torch.cuda.is_available():
-            quantization_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.float16,
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type="nf4"
-            )
+        Args:
+            model_name: Name of the model to load
+            use_4bit: Whether to use 4-bit quantization
+        
+        Raises:
+            RuntimeError: If model loading fails
+        """
+        try:
+            print(f"Loading {model_name} for question generation...")
             
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                quantization_config=quantization_config,
-                device_map="auto",
-                trust_remote_code=True
-            )
-        else:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                device_map="auto" if torch.cuda.is_available() else None,
-                trust_remote_code=True
-            )
-        
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-        
-        self.model.eval()
-        print(f"✓ Loaded {model_name} successfully")
-    
-    def _init_template_generator(self):
-        """Initialize template-based fallback generator."""
-        self.model = None
-        self.tokenizer = None
-        
-        # Add learnable parameters for optimizer compatibility
-        self.template_embeddings = nn.Parameter(torch.randn(10, 32))
-        
-        # Question templates
-        self.clarifying_questions = {
-            "cough": [
-                "Is your cough dry or are you bringing up mucus?",
-                "How long have you had the cough?",
-                "Does the cough get worse at certain times?"
-            ],
-            "dyspnea": [
-                "Does the breathlessness happen at rest or with activity?",
-                "Can you lie flat or does it get worse when lying down?",
-                "How quickly did this come on?"
-            ],
-            "chest_pain": [
-                "Where exactly is the chest pain?",
-                "Does the pain get worse with breathing?",
-                "Is the pain sharp or dull?"
-            ],
-            "fever": [
-                "How high is your temperature?",
-                "When did the fever start?",
-                "Do you have chills or night sweats?"
-            ]
-        }
+            if use_4bit and torch.cuda.is_available():
+                quantization_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4"
+                )
+                
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    quantization_config=quantization_config,
+                    device_map="auto",
+                    trust_remote_code=True
+                )
+            else:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                    device_map="auto" if torch.cuda.is_available() else None,
+                    trust_remote_code=True
+                )
+            
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            self.model.eval()
+            print(f"✓ Loaded {model_name} successfully")
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load model {model_name}. "
+                f"Error: {e}\n"
+                f"Requirements:\n"
+                f"- transformers==4.46.0\n"
+                f"- bitsandbytes==0.44.1 (for 4-bit quantization)\n"
+                f"- torch==2.5.1\n"
+                f"- CUDA GPU with 4GB+ VRAM recommended (CPU mode available with use_4bit=False)\n"
+                f"- Internet connection to download model from HuggingFace Hub"
+            ) from e
     
     def _create_question_prompt(
         self,
@@ -184,13 +185,14 @@ Question: [/INST]"""
             
         Returns:
             Generated question string
+            
+        Raises:
+            RuntimeError: If LLM generation fails
         """
-        if not self.use_llm or self.model is None:
-            return self._generate_with_template(
-                symptoms,
-                previous_answers=previous_answers,
-                previous_questions=previous_questions,
-                conversation_history=conversation_history,
+        if self.model is None:
+            raise RuntimeError(
+                "Model not loaded. Ensure QuestionGenerator was initialized with use_pretrained=True "
+                "and model loaded successfully."
             )
         
         try:
@@ -228,61 +230,16 @@ Question: [/INST]"""
             if question and not question.endswith('?'):
                 question += '?'
             
-            return question if question else self._generate_with_template(symptoms, previous_answers)
+            if not question:
+                raise RuntimeError("Model generated empty question")
+            
+            return question
         
         except Exception as e:
-            print(f"Warning: LLM question generation failed: {e}")
-            return self._generate_with_template(
-                symptoms,
-                previous_answers=previous_answers,
-                previous_questions=previous_questions,
-                conversation_history=conversation_history,
-            )
-    
-    def _generate_with_template(
-        self,
-        symptoms: List[str],
-        previous_answers: Optional[List[str]] = None,
-        previous_questions: Optional[List[str]] = None,
-        conversation_history: Optional[List[Dict[str, str]]] = None,
-    ) -> str:
-        """
-        Generate question using templates (fallback).
-        
-        Args:
-            symptoms: List of symptoms
-            previous_answers: Previously provided answers
-            previous_questions: Questions asked earlier in the exchange
-            conversation_history: Structured history of question/answer pairs
-            
-        Returns:
-            Question string
-        """
-        # Find symptoms that have questions
-        available_symptoms = []
-        for symptom in symptoms:
-            # Normalize symptom
-            base_symptom = symptom.replace('_', ' ').lower()
-            
-            # Check if we have questions for this symptom
-            for key in self.clarifying_questions:
-                if key in base_symptom or base_symptom in key:
-                    available_symptoms.append(key)
-                    break
-        
-        asked = set(previous_questions or [])
-
-        if available_symptoms:
-            symptom = random.choice(available_symptoms)
-            questions = [q for q in self.clarifying_questions[symptom] if q not in (previous_questions or [])]
-            if questions:
-                return random.choice(questions)
-
-        default_question = "Can you tell me more about when these symptoms started?"
-        if default_question in asked:
-            default_question = "Are there any other symptoms we should know about?"
-
-        return default_question
+            raise RuntimeError(
+                f"LLM question generation failed: {e}\n"
+                f"Ensure model is properly loaded and device has sufficient memory."
+            ) from e
     
     def generate_candidate_questions(
         self,

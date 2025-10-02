@@ -1,6 +1,7 @@
 """
 Realism scoring module for medical complaints.
 Uses language models to assess the authenticity and realism of generated patient complaints.
+Requires transformers to be properly installed.
 """
 
 import math
@@ -11,16 +12,22 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple
 import logging
 
+# Enforce required dependencies
 try:
     from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
     from transformers import AutoModelForCausalLM
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
+except ImportError as e:
+    raise ImportError(
+        "transformers is required for RealismScorer. "
+        "Install with: pip install transformers==4.46.0\n"
+        "GPU Requirements: CUDA-capable GPU with 4GB+ VRAM recommended for full functionality. "
+        "CPU-only mode available but slower."
+    ) from e
 
 class RealismScorer:
     """
     Assesses the realism of patient complaints using pre-trained language models.
+    Requires transformers to be installed.
     """
     
     def __init__(self, 
@@ -31,14 +38,6 @@ class RealismScorer:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.logger = logging.getLogger(__name__)
         
-        if not TRANSFORMERS_AVAILABLE:
-            self.logger.warning("Transformers not available, using mock realism scorer")
-            self.model = None
-            self.tokenizer = None
-            self.perplexity_model = None
-            self.perplexity_tokenizer = None
-            return
-
         try:
             if use_medical_model:
                 medical_models = [
@@ -58,20 +57,22 @@ class RealismScorer:
                         last_error = load_error
                         continue
                 else:
-                    if last_error:
-                        self.logger.warning(
-                            "Failed to load preferred medical models; falling back to bert-base-uncased: %s",
-                            last_error
-                        )
-                    self.tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-                    self.model = AutoModel.from_pretrained("bert-base-uncased").to(self.device)
+                    # All preferred models failed - raise error
+                    raise RuntimeError(
+                        f"Failed to load any preferred medical model. Last error: {last_error}\n"
+                        f"Attempted models: {medical_models}\n"
+                        f"Requirements:\n"
+                        f"- transformers==4.46.0\n"
+                        f"- torch==2.5.1\n"
+                        f"- Internet connection to download models from HuggingFace Hub"
+                    )
             else:
                 self.tokenizer = AutoTokenizer.from_pretrained(model_name)
                 self.model = AutoModel.from_pretrained(model_name).to(self.device)
 
             self.model.eval()
 
-            # Initialize perplexity scorer if available
+            # Initialize perplexity scorer
             try:
                 self.perplexity_tokenizer = AutoTokenizer.from_pretrained("gpt2")
                 # gpt2 has no pad token by default; align with eos token for batching
@@ -81,16 +82,19 @@ class RealismScorer:
                 self.perplexity_model = AutoModelForCausalLM.from_pretrained("gpt2").to(self.device)
                 self.perplexity_model.eval()
             except Exception as e:
-                self.logger.warning(f"Failed to initialize perplexity model: {e}")
-                self.perplexity_model = None
-                self.perplexity_tokenizer = None
+                raise RuntimeError(
+                    f"Failed to initialize perplexity model (gpt2): {e}\n"
+                    f"Requirements:\n"
+                    f"- transformers==4.46.0\n"
+                    f"- torch==2.5.1\n"
+                    f"- Internet connection to download model from HuggingFace Hub"
+                ) from e
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize realism scorer: {e}")
-            self.model = None
-            self.tokenizer = None
-            self.perplexity_model = None
-            self.perplexity_tokenizer = None
+            raise RuntimeError(
+                f"Failed to initialize realism scorer: {e}\n"
+                f"Ensure all dependencies are properly installed."
+            ) from e
     
     def compute_realism_score(self, complaints: List[str]) -> torch.Tensor:
         """
