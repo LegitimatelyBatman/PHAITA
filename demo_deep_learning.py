@@ -5,11 +5,13 @@ Shows the new DeBERTa + GNN discriminator and LLM-based generator.
 """
 
 import torch
-from phaita.models.discriminator import DiagnosisDiscriminator
-from phaita.models.generator import SymptomGenerator, ComplaintGenerator
-from phaita.models.question_generator import QuestionGenerator
+
 from phaita.data.preprocessing import DataPreprocessor
 from phaita.data.synthetic_generator import SyntheticDataGenerator
+from phaita.models.discriminator import DiagnosisDiscriminator
+from phaita.models.generator import ComplaintGenerator, SymptomGenerator
+from phaita.models.question_generator import QuestionGenerator
+from phaita.triage import enrich_differential_with_guidance, format_differential_report
 
 
 def print_section(title):
@@ -38,11 +40,18 @@ def demo_discriminator():
         "Running a high fever with fatigue and body aches"
     ]
     
-    predictions = disc.predict_diagnosis(complaints)
-    
-    for complaint, (code, confidence) in zip(complaints, predictions):
+    predictions = disc.predict_diagnosis(complaints, top_k=3)
+
+    for complaint, differential in zip(complaints, predictions):
+        enriched = enrich_differential_with_guidance(differential)
+        primary = enriched[0]
+        report = format_differential_report(differential)
         print(f"\n  Complaint: {complaint[:50]}...")
-        print(f"  Prediction: {code} (confidence: {confidence:.2%})")
+        print(f"  Primary: {primary['condition_name']} ({primary['condition_code']}) "
+              f"prob={primary['probability']:.2%}")
+        print("  Differential:")
+        for line in report.splitlines():
+            print(f"    {line}")
     
     # Show detailed explanation
     print("\n📝 Detailed explanation for first complaint:")

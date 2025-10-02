@@ -6,9 +6,10 @@ Enhanced with user diagnosis testing and adversarial challenge mode.
 
 import argparse
 import logging
-import sys
 import os
 import random
+import sys
+import textwrap
 from pathlib import Path
 
 # Add the package to Python path
@@ -24,6 +25,7 @@ from phaita import (
 )
 from phaita.conversation import ConversationEngine
 from phaita.models.question_generator import QuestionGenerator
+from phaita.triage import format_differential_report
 # from phaita.models import SymptomGenerator, ComplaintGenerator, DiagnosisDiscriminator
 try:
     from phaita.models.enhanced_bayesian_network import create_enhanced_bayesian_network
@@ -136,15 +138,20 @@ def demo_command(args):
         # Generate patient complaint
         complaint = complaint_gen.generate_complaint(symptoms, code)
         
-        # Get diagnosis prediction
-        predictions = discriminator.predict_diagnosis([complaint])
-        pred_code, confidence = predictions[0]
-        
+        # Get diagnosis predictions
+        predictions = discriminator.predict_diagnosis([complaint], top_k=args.top_k)
+        report = format_differential_report(predictions[0])
+        top_entry = predictions[0][0]
+        pred_code = top_entry["condition_code"]
+        confidence = top_entry["probability"]
+
         print(f"\n🩺 Example {i+1}:")
         print(f"   True Condition: {code} - {condition_data['name']}")
         print(f"   Symptoms: {', '.join(symptoms[:3])}...")
         print(f"   Patient Says: \"{complaint}\"")
-        print(f"   AI Diagnosis: {pred_code} (confidence: {confidence:.3f})")
+        print(f"   AI Primary Diagnosis: {pred_code} (probability: {confidence:.3f})")
+        print("\n   Differential guidance:")
+        print(textwrap.indent(report, "      "))
         
         # Check if correct
         correct = "✅" if pred_code == code else "❌"
@@ -593,7 +600,9 @@ Examples:
     # Demo command
     demo_parser = subparsers.add_parser('demo', help='Run system demonstration')
     demo_parser.add_argument('--num-examples', type=int, default=3,
-                           help='Number of examples to generate')
+                             help='Number of examples to generate')
+    demo_parser.add_argument('--top-k', type=int, default=3,
+                             help='Number of diagnoses to include in the differential list')
     
     # Generate command
     gen_parser = subparsers.add_parser('generate', help='Generate synthetic data')

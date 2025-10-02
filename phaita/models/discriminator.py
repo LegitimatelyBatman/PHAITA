@@ -1,13 +1,17 @@
-"""
-Diagnosis discriminator using DeBERTa encoder and Graph Neural Networks.
-Combines text features from patient complaints with symptom graph relationships.
+"""Diagnosis discriminator using DeBERTa encoder and Graph Neural Networks.
+
+Combines text features from patient complaints with symptom graph relationships
+and exposes convenience helpers for ranked differential diagnosis generation.
 """
 
+import math
 import random
+from typing import Any, Dict, List, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Tuple, Dict, Optional
+
 from ..data.icd_conditions import RespiratoryConditions
 
 try:
@@ -302,34 +306,86 @@ class DiagnosisDiscriminator(nn.Module):
         self,
         complaints: List[str],
         top_k: int = 1
-    ) -> List[Tuple[str, float]]:
-        """
-        Predict diagnosis from patient complaints.
-        
+    ) -> List[List[Dict[str, Any]]]:
+        """Predict ranked differential diagnosis lists for patient complaints.
+
         Args:
-            complaints: List of patient complaint strings
-            top_k: Number of top predictions to return per complaint
-            
+            complaints: List of patient complaint strings.
+            top_k: Number of top predictions to return per complaint. The
+                predictions are ordered by probability (highest first).
+
         Returns:
-            List of (condition_code, confidence) tuples for each complaint
+            A list with one entry per complaint. Each entry is a list of
+            dictionaries containing:
+                - ``condition_code``: ICD-10 code of the diagnosis
+                - ``condition_name``: Friendly condition name
+                - ``probability``: Model probability for the diagnosis
+                - ``confidence_interval``: Tuple of (lower, upper) bounds
+                - ``evidence``: Supporting symptom and severity indicators
         """
+        if top_k <= 0:
+            raise ValueError("top_k must be greater than zero")
+
         self.eval()
+        ranked_predictions: List[List[Dict[str, Any]]] = []
         with torch.no_grad():
             outputs = self.forward(complaints)
             diagnosis_logits = outputs["diagnosis_logits"]
-            
+
             # Convert logits to probabilities
             probs = F.softmax(diagnosis_logits, dim=1)
-            
-            predictions = []
-            for prob in probs:
-                # Get top prediction
-                top_prob, top_idx = prob.max(dim=0)
-                pred_code = self.condition_codes[top_idx.item()]
-                confidence = top_prob.item()
-                predictions.append((pred_code, confidence))
-        
-        return predictions
+
+            for idx, prob_distribution in enumerate(probs):
+                complaint_predictions: List[Dict[str, Any]] = []
+                logits_for_complaint = diagnosis_logits[idx]
+                logit_spread = (logits_for_complaint.max() - logits_for_complaint.min()).item()
+                effective_sample_size = max(int(logit_spread * 10), 20)
+
+                # Extract the ordered probabilities for this complaint
+                k = min(top_k, prob_distribution.shape[0])
+                top_probs, top_indices = torch.topk(prob_distribution, k=k)
+
+                for probability, condition_idx in zip(top_probs, top_indices):
+                    prob_value = probability.item()
+                    condition_code = self.condition_codes[condition_idx.item()]
+                    condition_data = RespiratoryConditions.get_condition_by_code(condition_code)
+                    confidence_interval = self._estimate_confidence_interval(
+                        prob_value,
+                        effective_sample_size
+                    )
+
+                    evidence = {
+                        "key_symptoms": condition_data.get("symptoms", [])[:3],
+                        "severity_indicators": condition_data.get("severity_indicators", [])[:2],
+                        "description": condition_data.get("description", "")
+                    }
+
+                    complaint_predictions.append({
+                        "condition_code": condition_code,
+                        "condition_name": condition_data.get("name", condition_code),
+                        "probability": prob_value,
+                        "confidence_interval": confidence_interval,
+                        "evidence": evidence
+                    })
+
+                ranked_predictions.append(complaint_predictions)
+
+        return ranked_predictions
+
+    @staticmethod
+    def _estimate_confidence_interval(probability: float, sample_size: int) -> tuple:
+        """Estimate a simple 95% confidence interval around a probability.
+
+        The interval is computed using a normal approximation of the
+        binomial distribution with an empirically derived pseudo sample size.
+        The bounds are clipped to the valid range of [0, 1].
+        """
+        pseudo_n = max(sample_size, 1)
+        standard_error = math.sqrt(max(probability * (1.0 - probability) / pseudo_n, 1e-6))
+        margin = 1.96 * standard_error
+        lower = max(0.0, probability - margin)
+        upper = min(1.0, probability + margin)
+        return (lower, upper)
     
     def predict_with_explanation(
         self,
@@ -393,12 +449,15 @@ class DiagnosisDiscriminator(nn.Module):
         Returns:
             Dictionary with evaluation metrics
         """
-        predictions = self.predict_diagnosis(complaints)
-        
+        predictions = self.predict_diagnosis(complaints, top_k=1)
+
         correct = 0
         total_confidence = 0.0
-        
-        for (pred_code, confidence), true_code in zip(predictions, true_codes):
+
+        for ranked_predictions, true_code in zip(predictions, true_codes):
+            top_prediction = ranked_predictions[0]
+            pred_code = top_prediction["condition_code"]
+            confidence = top_prediction["probability"]
             if pred_code == true_code:
                 correct += 1
             total_confidence += confidence
