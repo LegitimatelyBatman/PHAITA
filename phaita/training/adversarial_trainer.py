@@ -494,7 +494,25 @@ class AdversarialTrainer:
             _,
         ) = self.generate_training_batch(batch_size, return_metadata=True)
 
-        fake_outputs = self.discriminator(fake_complaints, return_features=True)
+        discriminator_params = list(self.discriminator.parameters())
+        original_requires_grad = [param.requires_grad for param in discriminator_params]
+        was_training = self.discriminator.training
+
+        for param in discriminator_params:
+            param.requires_grad_(False)
+
+        try:
+            self.discriminator.eval()
+            with torch.no_grad():
+                fake_outputs = self.discriminator(fake_complaints, return_features=True)
+        finally:
+            for param, requires_grad in zip(discriminator_params, original_requires_grad):
+                param.requires_grad_(requires_grad)
+
+            if was_training:
+                self.discriminator.train()
+            else:
+                self.discriminator.eval()
 
         adv_scores = torch.sigmoid(fake_outputs["discriminator_scores"]).squeeze(-1).detach()
         diversity_penalty = self.diversity_loss(fake_outputs["text_features"], fake_complaints)
