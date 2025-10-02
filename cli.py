@@ -27,6 +27,7 @@ from phaita import (
 from phaita.conversation import ConversationEngine
 from phaita.models.question_generator import QuestionGenerator
 from phaita.triage import format_differential_report
+from phaita.triage.info_sheet import format_info_sheet
 # from phaita.models import SymptomGenerator, ComplaintGenerator, DiagnosisDiscriminator
 try:
     from phaita.models.enhanced_bayesian_network import create_enhanced_bayesian_network
@@ -70,6 +71,87 @@ def _get_diagnosis_discriminator() -> DiagnosisDiscriminator:
     model = DiagnosisDiscriminator()
     model.eval()
     return model
+
+
+def _normalize_symptom(symptom: str) -> str:
+    return symptom.strip().lower().replace(" ", "_")
+
+
+def _extract_symptoms_from_text(text: str) -> list:
+    candidates = [segment for segment in text.split(",") if segment.strip()]
+    normalized = [_normalize_symptom(candidate) for candidate in candidates if candidate.strip()]
+    return [symptom for symptom in normalized if symptom]
+
+
+def _summarize_transcript(chief_complaint: str, turns: list) -> str:
+    lines = [f"Chief complaint: {chief_complaint}"]
+    for turn in turns[1:]:
+        question = turn.get("question", "")
+        answer = turn.get("answer", "")
+        if question:
+            lines.append(f"Q: {question}")
+        if answer:
+            lines.append(f"A: {answer}")
+    return "\n".join(lines)
+
+
+def _run_triage_dialogue(
+    discriminator: DiagnosisDiscriminator,
+    engine: ConversationEngine,
+    *,
+    chief_complaint: str,
+    response_provider,
+    printer=print,
+    initial_extracted_symptoms=None,
+    top_k: int = 3,
+):
+    """Execute information-gain dialogue and update differential in real time."""
+
+    initial_symptoms = list(initial_extracted_symptoms or [])
+    engine.add_symptoms(initial_symptoms)
+
+    turns = [
+        {
+            "question": "Chief complaint",
+            "answer": chief_complaint,
+            "extracted_symptoms": initial_symptoms,
+        }
+    ]
+
+    def predict_and_print(header: str):
+        transcript = _summarize_transcript(chief_complaint, turns)
+        predictions_batch = discriminator.predict_diagnosis([transcript], top_k=top_k)
+        ranked_predictions = predictions_batch[0] if predictions_batch else []
+        if not ranked_predictions:
+            return []
+        if header:
+            printer(header)
+            printer(format_differential_report(ranked_predictions))
+        return ranked_predictions
+
+    ranked = predict_and_print("\n🔍 Initial differential:")
+
+    while not engine.should_present_diagnosis():
+        prompt = engine.next_prompt()
+        if not prompt:
+            break
+
+        response, extracted_symptoms = response_provider(prompt, len(turns))
+        if response is None:
+            break
+
+        engine.record_response(prompt, response, extracted_symptoms)
+        turns.append(
+            {
+                "question": prompt,
+                "answer": response,
+                "extracted_symptoms": list(extracted_symptoms),
+            }
+        )
+
+        ranked = predict_and_print("\n🔄 Updated differential:") or ranked
+
+    return turns, ranked
 
 
 def train_command(args):
@@ -286,110 +368,102 @@ def conversation_command(args):
 
 
 def diagnose_command(args):
-    """Test discriminator on user-provided complaint."""
+    """Run the diagnosis workflow with an information-gain conversation loop."""
+
     print("🩺 PHAITA Diagnosis Tool")
     print("=" * 40)
 
     try:
         discriminator = _get_diagnosis_discriminator()
+        question_generator = QuestionGenerator(use_pretrained=False)
 
-        def run_diagnosis(input_complaint: str):
-            """Execute model prediction with graceful fallback."""
-            try:
-                code, confidence, explanation = discriminator.predict_with_explanation(input_complaint)
-                top_predictions = explanation.get("top_3_predictions", [])
-            except AttributeError:
-                predictions = discriminator.predict_diagnosis([input_complaint], top_k=3)
-                ranked = predictions[0] if predictions else []
-                if ranked:
-                    top_entry = ranked[0]
-                    code = top_entry.get("condition_code", "UNKNOWN")
-                    confidence = top_entry.get("probability", 0.0)
-                else:
-                    code = "UNKNOWN"
-                    confidence = 0.0
-                top_predictions = [
-                    (
-                        entry.get("condition_code", "UNKNOWN"),
-                        entry.get("probability", 0.0)
+        def run_session(complaint: str):
+            if not complaint:
+                print("❌ No complaint provided")
+                return
+
+            print(f"\n📝 Analyzing complaint: \"{complaint}\"")
+
+            engine = ConversationEngine(
+                question_generator,
+                max_questions=5,
+                min_symptom_count=3,
+                max_no_progress_turns=2,
+            )
+
+            def interactive_response(prompt: str, _turn_index: int):
+                print(f"\nAI: {prompt}")
+                response = input("You: ").strip()
+                if response.lower() in {"quit", "exit", "q"}:
+                    print("Ending conversation early at user request.")
+                    return None, []
+                extracted = _extract_symptoms_from_text(response)
+                return response, extracted
+
+            initial_symptoms = _extract_symptoms_from_text(complaint)
+            turns, ranked = _run_triage_dialogue(
+                discriminator,
+                engine,
+                chief_complaint=complaint,
+                response_provider=interactive_response,
+                initial_extracted_symptoms=initial_symptoms,
+            )
+
+            if not ranked:
+                print("❌ Unable to generate differential diagnosis.")
+                return
+
+            top_entry = ranked[0]
+            print("\n🔎 Primary diagnosis candidate:")
+            print(
+                f"   {top_entry.get('condition_name', top_entry.get('condition_code'))}"
+                f" ({top_entry.get('condition_code', 'UNKNOWN')})"
+            )
+            print(f"   Probability: {top_entry.get('probability', 0.0):.3f}")
+
+            if len(ranked) > 1:
+                print("   Other differentials:")
+                for entry in ranked[1:]:
+                    print(
+                        f"      - {entry.get('condition_name', entry.get('condition_code'))}"
+                        f" ({entry.get('condition_code')}) p={entry.get('probability', 0.0):.2f}"
                     )
-                    for entry in ranked
-                ]
-                condition_info = RespiratoryConditions.get_condition_by_code(code)
-                explanation = {
-                    "condition_code": code,
-                    "condition_name": condition_info.get("name") if condition_info else code,
-                    "confidence": confidence,
-                    "matched_keywords": [],
-                    "reasoning": "Model prediction via predict_diagnosis",
-                    "top_3_predictions": top_predictions,
-                }
 
-            return code, confidence, explanation, top_predictions
+            print("\n🗒️  Patient info sheet template:")
+            info_sheet = format_info_sheet(
+                turns,
+                ranked,
+                chief_complaint=complaint,
+            )
+            print(info_sheet)
 
-        # Get user input
+            if args.detailed:
+                print("\n🗂️  Conversation transcript:")
+                for turn in turns:
+                    question = turn.get("question")
+                    answer = turn.get("answer")
+                    if question:
+                        print(f"   Q: {question}")
+                    if answer:
+                        print(f"   A: {answer}")
+
         if args.complaint:
-            complaint = args.complaint
+            run_session(args.complaint)
         else:
             print("Enter a patient complaint (or 'quit' to exit):")
             complaint = input("> ").strip()
-
-            if complaint.lower() in ['quit', 'exit', 'q']:
+            if complaint.lower() in {"quit", "exit", "q"}:
                 return
-
-        if not complaint:
-            print("❌ No complaint provided")
-            return
-
-        print(f"\n📝 Analyzing complaint: \"{complaint}\"")
-
-        code, confidence, explanation, top_predictions = run_diagnosis(complaint)
-
-        print(f"\n🔍 Diagnosis Results:")
-        condition_name = explanation.get("condition_name") or code
-        print(f"   Primary Diagnosis: {condition_name} ({code})")
-        print(f"   Confidence: {confidence:.3f}")
-
-        secondary_conditions = [
-            f"{pred_code} ({prob:.3f})" if isinstance(prob, (int, float)) else pred_code
-            for pred_code, prob in top_predictions
-            if pred_code != code
-        ]
-        if secondary_conditions:
-            print(f"   Secondary Conditions: {', '.join(secondary_conditions)}")
-        else:
-            print("   Secondary Conditions: None")
-
-        if args.detailed:
-            print(f"\n📊 Detailed Analysis:")
-            matched_keywords = explanation.get("matched_keywords", [])
-            if matched_keywords:
-                print(f"   Matched Keywords: {', '.join(matched_keywords)}")
-            reasoning = explanation.get("reasoning")
-            if reasoning:
-                print(f"   Reasoning: {reasoning}")
-
-            if top_predictions:
-                print("   Differential Ranking:")
-                for rank, (pred_code, prob) in enumerate(top_predictions, start=1):
-                    display_prob = f"{prob:.3f}" if isinstance(prob, (int, float)) else prob
-                    print(f"      {rank}. {pred_code} - {display_prob}")
+            run_session(complaint)
 
         if args.interactive:
             while True:
                 print("\n" + "=" * 40)
                 print("Enter another complaint (or 'quit' to exit):")
                 new_complaint = input("> ").strip()
-
-                if new_complaint.lower() in ['quit', 'exit', 'q']:
+                if new_complaint.lower() in {"quit", "exit", "q"}:
                     break
-
-                if new_complaint:
-                    new_code, new_confidence, _, _ = run_diagnosis(new_complaint)
-                    print(
-                        f"\n🔍 Diagnosis: {new_code} "
-                        f"(confidence: {new_confidence:.3f})"
-                    )
+                run_session(new_complaint)
 
     except Exception as e:
         print(f"❌ Error in diagnosis: {e}")
@@ -504,8 +578,33 @@ def challenge_command(args):
             except Exception:
                 complaint = _generate_complaint_from_symptoms(case["symptoms"], case.get("metadata", {}))
 
-            predictions_batch = discriminator.predict_diagnosis([complaint], top_k=3)
-            ranked_predictions = predictions_batch[0] if predictions_batch else []
+            engine = ConversationEngine(
+                QuestionGenerator(use_pretrained=False),
+                max_questions=4,
+                min_symptom_count=3,
+                max_no_progress_turns=2,
+            )
+
+            symptom_queue = list(case.get("symptoms", []))
+            disclosed_symptoms = set(case.get("symptoms", [])[:2])
+
+            def auto_response(prompt: str, _turn_index: int):
+                while symptom_queue:
+                    symptom = symptom_queue.pop(0)
+                    if symptom in disclosed_symptoms:
+                        continue
+                    disclosed_symptoms.add(symptom)
+                    phrase = symptom.replace("_", " ")
+                    return f"Patient reports {phrase}.", [symptom]
+                return "No additional symptoms reported.", []
+
+            turns, ranked_predictions = _run_triage_dialogue(
+                discriminator,
+                engine,
+                chief_complaint=complaint,
+                response_provider=auto_response,
+                initial_extracted_symptoms=case.get("symptoms", [])[:2],
+            )
 
             if ranked_predictions:
                 top_entry = ranked_predictions[0]
@@ -541,6 +640,15 @@ def challenge_command(args):
                         for entry in ranked_predictions[:3]
                     )
                     print(f"      Top predictions: {top_summary}")
+
+                info_sheet = format_info_sheet(
+                    turns,
+                    ranked_predictions,
+                    chief_complaint=complaint,
+                )
+                print("      Info sheet preview:")
+                for line in info_sheet.splitlines():
+                    print(f"         {line}")
 
         total_cases = len(evaluated_cases)
         correct_diagnoses = sum(1 for case in evaluated_cases if case["is_correct"])
