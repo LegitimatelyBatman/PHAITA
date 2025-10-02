@@ -75,7 +75,7 @@ class QuestionGenerator(nn.Module):
         self.temperature = temperature
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.default_candidate_pool_size = 3
-        
+
         # Load LLM
         self._load_llm(model_name, use_4bit)
     
@@ -281,16 +281,10 @@ Question: [/INST]"""
 
         asked = set((previous_questions or []))
 
-        generator = (
-            self._generate_with_llm
-            if self.use_llm
-            else self._generate_with_template
-        )
-
         attempts = 0
         max_attempts = max(requested * 2, requested + 1)
         while len(candidates) < requested and attempts < max_attempts:
-            question = generator(
+            question = self._generate_with_llm(
                 symptoms,
                 previous_answers=previous_answers,
                 previous_questions=list(asked),
@@ -313,13 +307,7 @@ Question: [/INST]"""
         previous_questions: Optional[List[str]] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
-        """
-        Generate a clarifying question based on symptoms.
-        Uses LLM if available, otherwise templates.
-
-        This helper maintains backwards compatibility with earlier code paths
-        by selecting the first candidate from the broader question pool.
-        """
+        """Generate a clarifying question based on symptoms using the LLM."""
 
         candidates = self.generate_candidate_questions(
             symptoms,

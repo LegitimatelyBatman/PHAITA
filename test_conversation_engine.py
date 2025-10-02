@@ -5,6 +5,9 @@ It validates the conversation engine logic independently of model implementation
 For tests requiring real models, see test_integration.py.
 """
 
+import sys
+from types import SimpleNamespace
+
 from phaita.conversation.engine import ConversationEngine
 
 
@@ -187,3 +190,80 @@ def test_engine_information_gain_threshold_stops_loop():
     assert engine.should_present_diagnosis()
     assert engine.information_gain_history[-1] > 0
     assert engine.last_info_gain_gradient is not None
+
+
+def test_question_generator_produces_candidate_questions_without_dependencies():
+    """Ensure QuestionGenerator returns candidates even with stubbed deps."""
+
+    class DummyEncoding(dict):
+        def __init__(self):
+            super().__init__(input_ids=[[0]])
+
+        def to(self, device):  # noqa: D401 - match transformers API
+            return self
+
+    class DummyTokenizer:
+        eos_token = "<eos>"
+        eos_token_id = 2
+
+        def __init__(self):
+            self.pad_token = None
+
+        @classmethod
+        def from_pretrained(cls, *args, **kwargs):
+            return cls()
+
+        def __call__(self, *args, **kwargs):  # noqa: D401 - mimic tokenizer
+            return DummyEncoding()
+
+        def decode(self, *args, **kwargs):
+            return "[/INST]Is your cough getting worse?"
+
+    class DummyModel:
+        device = "cpu"
+
+        @classmethod
+        def from_pretrained(cls, *args, **kwargs):
+            return cls()
+
+        def eval(self):  # noqa: D401 - align with HF interface
+            return self
+
+        def generate(self, **kwargs):  # noqa: D401 - align with HF interface
+            return [[0, 1, 2]]
+
+    class DummyBitsAndBytesConfig:  # noqa: D401 - placeholder config
+        def __init__(self, *args, **kwargs):
+            pass
+
+    original_transformers = sys.modules.get("transformers")
+    original_bitsandbytes = sys.modules.get("bitsandbytes")
+
+    sys.modules["transformers"] = SimpleNamespace(
+        AutoTokenizer=DummyTokenizer,
+        AutoModelForCausalLM=DummyModel,
+        BitsAndBytesConfig=DummyBitsAndBytesConfig,
+    )
+    sys.modules["bitsandbytes"] = SimpleNamespace()
+
+    try:
+        sys.modules.pop("phaita.models.question_generator", None)
+        from phaita.models.question_generator import QuestionGenerator
+
+        generator = QuestionGenerator(model_name="dummy/model", use_4bit=False)
+        questions = generator.generate_candidate_questions(["cough"])
+
+        assert questions
+        assert any(q.strip() for q in questions)
+    finally:
+        sys.modules.pop("phaita.models.question_generator", None)
+
+        if original_transformers is not None:
+            sys.modules["transformers"] = original_transformers
+        else:
+            sys.modules.pop("transformers", None)
+
+        if original_bitsandbytes is not None:
+            sys.modules["bitsandbytes"] = original_bitsandbytes
+        else:
+            sys.modules.pop("bitsandbytes", None)
