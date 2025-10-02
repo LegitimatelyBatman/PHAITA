@@ -40,10 +40,19 @@ except ImportError as e:
 class SymptomGenerator:
     """Generates structured patient presentations for medical conditions."""
 
-    def __init__(self):
-        network = BayesianSymptomNetwork()
+    def __init__(self, conditions: Optional[Dict[str, Dict]] = None):
+        network = BayesianSymptomNetwork(conditions=conditions)
         self.simulator = PatientSimulator(network)
         self.bayesian_network = network
+        RespiratoryConditions.register_reload_hook(self.reload_conditions)
+
+    def reload_conditions(self, conditions: Optional[Dict[str, Dict]] = None) -> None:
+        """Reload the symptom catalogue for long-running services."""
+
+        if conditions is None:
+            conditions = RespiratoryConditions.get_all_conditions()
+        self.bayesian_network.reload(conditions=conditions)
+        self.simulator.network = self.bayesian_network
 
     def generate_symptoms(
         self,
@@ -108,7 +117,7 @@ class ComplaintGenerator(nn.Module):
             )
 
         self.conditions = RespiratoryConditions.get_all_conditions()
-        self.symptom_generator = SymptomGenerator()
+        self.symptom_generator = SymptomGenerator(self.conditions)
         self.current_presentation: Optional[PatientPresentation] = None
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
@@ -139,8 +148,16 @@ class ComplaintGenerator(nn.Module):
             "awful",
         ]
 
+        RespiratoryConditions.register_reload_hook(self.reload_conditions)
+
         # Load LLM
         self._load_llm(model_name, use_4bit)
+
+    def reload_conditions(self, conditions: Optional[Dict[str, Dict]] = None) -> None:
+        """Refresh the condition catalogue and vocabularies at runtime."""
+
+        self.conditions = conditions or RespiratoryConditions.get_all_conditions()
+        self.symptom_generator.reload_conditions(self.conditions)
     
     def _load_llm(self, model_name: str, use_4bit: bool):
         """
