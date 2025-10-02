@@ -1,6 +1,7 @@
 """
 Graph Neural Network module for symptom relationship modeling.
 Uses Graph Attention Networks (GAT) to model relationships between symptoms.
+Requires torch-geometric to be properly installed.
 """
 
 import torch
@@ -9,13 +10,16 @@ import torch.nn.functional as F
 from typing import Dict, List, Tuple, Optional
 import networkx as nx
 
+# Enforce required dependencies
 try:
     from torch_geometric.nn import GATConv, global_mean_pool
     from torch_geometric.data import Data, Batch
-    TORCH_GEOMETRIC_AVAILABLE = True
-except ImportError:
-    TORCH_GEOMETRIC_AVAILABLE = False
-    print("Warning: torch_geometric not available. Using fallback implementation.")
+except ImportError as e:
+    raise ImportError(
+        "torch-geometric is required for GNN modules. "
+        "Install with: pip install torch-geometric==2.6.1\n"
+        "Note: torch-geometric requires torch==2.5.1"
+    ) from e
 
 
 class SymptomGraphBuilder:
@@ -129,43 +133,33 @@ class GraphAttentionNetwork(nn.Module):
         self.node_feature_dim = node_feature_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
-        self.use_torch_geometric = TORCH_GEOMETRIC_AVAILABLE
         
         # Node embeddings (learnable features for each symptom)
         self.node_embeddings = nn.Embedding(num_nodes, node_feature_dim)
         
-        if TORCH_GEOMETRIC_AVAILABLE:
-            # Use torch_geometric GAT layers
-            self.gat_layers = nn.ModuleList()
-            
-            # First layer
+        # Use torch_geometric GAT layers
+        self.gat_layers = nn.ModuleList()
+        
+        # First layer
+        self.gat_layers.append(
+            GATConv(node_feature_dim, hidden_dim, heads=num_heads, dropout=dropout)
+        )
+        
+        # Middle layers
+        for _ in range(num_layers - 2):
             self.gat_layers.append(
-                GATConv(node_feature_dim, hidden_dim, heads=num_heads, dropout=dropout)
+                GATConv(hidden_dim * num_heads, hidden_dim, heads=num_heads, dropout=dropout)
             )
-            
-            # Middle layers
-            for _ in range(num_layers - 2):
-                self.gat_layers.append(
-                    GATConv(hidden_dim * num_heads, hidden_dim, heads=num_heads, dropout=dropout)
-                )
-            
-            # Last layer (single head)
-            if num_layers > 1:
-                self.gat_layers.append(
-                    GATConv(hidden_dim * num_heads, output_dim, heads=1, dropout=dropout)
-                )
-            else:
-                # Single layer case
-                self.gat_layers.append(
-                    GATConv(node_feature_dim, output_dim, heads=1, dropout=dropout)
-                )
+        
+        # Last layer (single head)
+        if num_layers > 1:
+            self.gat_layers.append(
+                GATConv(hidden_dim * num_heads, output_dim, heads=1, dropout=dropout)
+            )
         else:
-            # Fallback: use simple MLP
-            self.fallback_mlp = nn.Sequential(
-                nn.Linear(node_feature_dim, hidden_dim),
-                nn.ReLU(),
-                nn.Dropout(dropout),
-                nn.Linear(hidden_dim, output_dim)
+            # Single layer case
+            self.gat_layers.append(
+                GATConv(node_feature_dim, output_dim, heads=1, dropout=dropout)
             )
         
         self.dropout = nn.Dropout(dropout)
@@ -191,24 +185,18 @@ class GraphAttentionNetwork(nn.Module):
         node_ids = torch.arange(self.num_nodes, device=edge_index.device)
         x = self.node_embeddings(node_ids)
         
-        if self.use_torch_geometric:
-            # Apply GAT layers
-            for i, layer in enumerate(self.gat_layers):
-                x = layer(x, edge_index)
-                if i < len(self.gat_layers) - 1:
-                    x = F.elu(x)
-                    x = self.dropout(x)
-            
-            # Global pooling to get graph-level embedding
-            graph_embedding = x.mean(dim=0, keepdim=True)
-            
-            # Repeat for batch
-            graph_embedding = graph_embedding.repeat(batch_size, 1)
-        else:
-            # Fallback: use MLP on average node features
-            x = self.fallback_mlp(x)
-            graph_embedding = x.mean(dim=0, keepdim=True)
-            graph_embedding = graph_embedding.repeat(batch_size, 1)
+        # Apply GAT layers
+        for i, layer in enumerate(self.gat_layers):
+            x = layer(x, edge_index)
+            if i < len(self.gat_layers) - 1:
+                x = F.elu(x)
+                x = self.dropout(x)
+        
+        # Global pooling to get graph-level embedding
+        graph_embedding = x.mean(dim=0, keepdim=True)
+        
+        # Repeat for batch
+        graph_embedding = graph_embedding.repeat(batch_size, 1)
         
         return graph_embedding
 

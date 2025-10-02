@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
 Test script for PHAITA components.
-Validates the core functionality without requiring heavy dependencies.
+Validates the core functionality without requiring heavy dependencies or model downloads.
+
+Note: This test suite does NOT require transformer models to be downloaded.
+It tests the data layer, configuration system, and Bayesian logic only.
+For tests requiring real models, see test_integration.py.
 """
 
 import sys

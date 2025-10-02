@@ -2,6 +2,7 @@
 
 Combines text features from patient complaints with symptom graph relationships
 and exposes convenience helpers for ranked differential diagnosis generation.
+Requires transformers and torch-geometric to be properly installed.
 """
 
 import math
@@ -14,25 +15,31 @@ import torch.nn.functional as F
 
 from ..data.icd_conditions import RespiratoryConditions
 
+# Enforce required dependencies
 try:
     from transformers import AutoTokenizer, AutoModel
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
-    print("Warning: transformers not available. Using fallback implementation.")
+except ImportError as e:
+    raise ImportError(
+        "transformers is required for DiagnosisDiscriminator. "
+        "Install with: pip install transformers==4.46.0\n"
+        "GPU Requirements: CUDA-capable GPU with 4GB+ VRAM recommended for full functionality. "
+        "CPU-only mode available but slower."
+    ) from e
 
 try:
     from .gnn_module import SymptomGraphModule
-    GNN_AVAILABLE = True
-except ImportError:
-    GNN_AVAILABLE = False
-    print("Warning: GNN module not available. Using fallback implementation.")
+except ImportError as e:
+    raise ImportError(
+        "GNN module is required for DiagnosisDiscriminator. "
+        "Ensure torch-geometric==2.6.1 is properly installed."
+    ) from e
 
 
 class DiagnosisDiscriminator(nn.Module):
     """
     Discriminator for diagnosing conditions from patient complaints.
     Uses DeBERTa for text encoding and GAT for symptom relationship modeling.
+    Requires transformers and torch-geometric to be installed.
     """
     
     def __init__(
@@ -50,43 +57,51 @@ class DiagnosisDiscriminator(nn.Module):
         
         Args:
             model_name: Name of the DeBERTa model to use
-            use_pretrained: Whether to use pretrained weights
+            use_pretrained: Whether to use pretrained weights (must be True)
             freeze_encoder: Whether to freeze the encoder weights
             gnn_hidden_dim: Hidden dimension for GNN
             gnn_output_dim: Output dimension for GNN
             fusion_hidden_dim: Hidden dimension for fusion layer
             dropout: Dropout rate
+        
+        Raises:
+            ValueError: If use_pretrained is False
+            RuntimeError: If model loading fails
         """
         super().__init__()
+        
+        if not use_pretrained:
+            raise ValueError(
+                "DiagnosisDiscriminator requires use_pretrained=True. "
+                "Fallback encoder has been removed. "
+                "Ensure transformers and torch-geometric are properly installed."
+            )
         
         self.conditions = RespiratoryConditions.get_all_conditions()
         self.num_conditions = len(self.conditions)
         self.condition_codes = list(self.conditions.keys())
-        self.use_pretrained = use_pretrained and TRANSFORMERS_AVAILABLE
-        
-        # Build keyword index for fallback
-        self._build_keyword_index()
         
         # Initialize text encoder (DeBERTa)
-        if self.use_pretrained:
-            try:
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                self.text_encoder = AutoModel.from_pretrained(model_name)
-                self.text_feature_dim = self.text_encoder.config.hidden_size  # 768 for base
-                
-                if freeze_encoder:
-                    for param in self.text_encoder.parameters():
-                        param.requires_grad = False
-            except Exception as e:
-                print(f"Warning: Could not load pretrained model: {e}")
-                print("Falling back to simple encoder")
-                self.use_pretrained = False
-                self._init_fallback_encoder()
-        else:
-            self._init_fallback_encoder()
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.text_encoder = AutoModel.from_pretrained(model_name)
+            self.text_feature_dim = self.text_encoder.config.hidden_size  # 768 for base
+            
+            if freeze_encoder:
+                for param in self.text_encoder.parameters():
+                    param.requires_grad = False
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load text encoder {model_name}. "
+                f"Error: {e}\n"
+                f"Requirements:\n"
+                f"- transformers==4.46.0\n"
+                f"- torch==2.5.1\n"
+                f"- Internet connection to download model from HuggingFace Hub"
+            ) from e
         
         # Initialize GNN for symptom relationships
-        if GNN_AVAILABLE:
+        try:
             self.gnn = SymptomGraphModule(
                 conditions=self.conditions,
                 hidden_dim=gnn_hidden_dim,
@@ -94,10 +109,14 @@ class DiagnosisDiscriminator(nn.Module):
                 dropout=dropout
             )
             self.graph_feature_dim = gnn_output_dim
-        else:
-            # Fallback: learnable graph embedding
-            self.graph_feature_dim = gnn_output_dim
-            self.gnn = nn.Parameter(torch.randn(1, self.graph_feature_dim))
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to initialize GNN module. "
+                f"Error: {e}\n"
+                f"Requirements:\n"
+                f"- torch-geometric==2.6.1\n"
+                f"- torch==2.5.1"
+            ) from e
         
         # Fusion layer (combines text + graph features)
         combined_dim = self.text_feature_dim + self.graph_feature_dim
@@ -125,52 +144,10 @@ class DiagnosisDiscriminator(nn.Module):
         )
         
         self.dropout = nn.Dropout(dropout)
-        
-    def _init_fallback_encoder(self):
-        """Initialize fallback encoder when transformers not available."""
-        self.text_feature_dim = 768
-        # Simple word embedding + pooling
-        vocab_size = 10000  # Simplified vocabulary
-        self.fallback_embeddings = nn.Embedding(vocab_size, 256)
-        self.fallback_encoder = nn.Sequential(
-            nn.Linear(256, 512),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(512, self.text_feature_dim)
-        )
-        self.tokenizer = None
-    
-    def _build_keyword_index(self) -> None:
-        """Build keyword index for matching (fallback method)."""
-        self.keyword_index = {}
-        
-        for code, data in self.conditions.items():
-            keywords = set()
             
-            # Add symptoms as keywords
-            for symptom in data["symptoms"] + data["severity_indicators"]:
-                keywords.add(symptom.replace('_', ' ').lower())
-                # Add partial keywords
-                for word in symptom.split('_'):
-                    keywords.add(word.lower())
-            
-            # Add lay terms
-            for term in data["lay_terms"]:
-                keywords.add(term.lower())
-                # Add individual words
-                for word in term.split():
-                    if len(word) > 3:  # Skip short words
-                        keywords.add(word.lower())
-            
-            # Add condition name keywords
-            for word in data["name"].lower().split():
-                keywords.add(word.lower())
-            
-            self.keyword_index[code] = keywords
-    
     def encode_text(self, complaints: List[str]) -> torch.Tensor:
         """
-        Encode text complaints to feature vectors.
+        Encode text complaints to feature vectors using DeBERTa.
         
         Args:
             complaints: List of patient complaint strings
@@ -178,63 +155,29 @@ class DiagnosisDiscriminator(nn.Module):
         Returns:
             Text features [batch_size, text_feature_dim]
         """
-        if self.use_pretrained and self.tokenizer is not None:
-            # Use DeBERTa encoder
-            try:
-                inputs = self.tokenizer(
-                    complaints,
-                    padding=True,
-                    truncation=True,
-                    max_length=512,
-                    return_tensors="pt"
-                )
-                
-                # Move to same device as model
-                inputs = {k: v.to(next(self.parameters()).device) for k, v in inputs.items()}
-                
-                with torch.set_grad_enabled(self.training):
-                    outputs = self.text_encoder(**inputs)
-                    # Use [CLS] token representation
-                    text_features = outputs.last_hidden_state[:, 0, :]
-                
-                return text_features
-            except Exception as e:
-                print(f"Warning: Error in DeBERTa encoding: {e}. Using fallback.")
-                return self._encode_text_fallback(complaints)
-        else:
-            return self._encode_text_fallback(complaints)
-    
-    def _encode_text_fallback(self, complaints: List[str]) -> torch.Tensor:
-        """
-        Fallback text encoding using simple embeddings.
-        
-        Args:
-            complaints: List of patient complaint strings
+        try:
+            inputs = self.tokenizer(
+                complaints,
+                padding=True,
+                truncation=True,
+                max_length=512,
+                return_tensors="pt"
+            )
             
-        Returns:
-            Text features [batch_size, text_feature_dim]
-        """
-        batch_size = len(complaints)
-        device = next(self.parameters()).device
-        
-        # Simple hash-based tokenization
-        features = []
-        for complaint in complaints:
-            words = complaint.lower().split()
-            word_ids = [hash(word) % 10000 for word in words[:50]]  # Max 50 words
+            # Move to same device as model
+            inputs = {k: v.to(next(self.parameters()).device) for k, v in inputs.items()}
             
-            if word_ids:
-                word_ids_tensor = torch.tensor(word_ids, device=device)
-                word_embeds = self.fallback_embeddings(word_ids_tensor)
-                # Mean pooling
-                pooled = word_embeds.mean(dim=0)
-                encoded = self.fallback_encoder(pooled)
-                features.append(encoded)
-            else:
-                # Empty complaint
-                features.append(torch.zeros(self.text_feature_dim, device=device))
-        
-        return torch.stack(features)
+            with torch.set_grad_enabled(self.training):
+                outputs = self.text_encoder(**inputs)
+                # Use [CLS] token representation
+                text_features = outputs.last_hidden_state[:, 0, :]
+            
+            return text_features
+        except Exception as e:
+            raise RuntimeError(
+                f"Error in DeBERTa encoding: {e}\n"
+                f"Ensure model is properly loaded and device has sufficient memory."
+            ) from e
     
     def get_graph_features(self, batch_size: int) -> torch.Tensor:
         """
@@ -246,11 +189,7 @@ class DiagnosisDiscriminator(nn.Module):
         Returns:
             Graph features [batch_size, graph_feature_dim]
         """
-        if GNN_AVAILABLE and hasattr(self.gnn, 'forward'):
-            return self.gnn(batch_size)
-        else:
-            # Fallback: repeat learnable embedding
-            return self.gnn.repeat(batch_size, 1)
+        return self.gnn(batch_size)
     
     def forward(
         self, 

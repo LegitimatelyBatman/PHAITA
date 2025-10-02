@@ -1,6 +1,6 @@
 """
 Symptom and complaint generators using Bayesian networks and language models.
-Supports both LLM-based generation (Mistral-7B) and template-based fallback.
+Requires transformers and bitsandbytes to be properly installed.
 """
 
 import random
@@ -15,19 +15,26 @@ from ..generation.patient_agent import (
     VocabularyProfile,
 )
 
+# Enforce required dependencies
 try:
     from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
-    print("Warning: transformers not available for generator.")
+except ImportError as e:
+    raise ImportError(
+        "transformers is required for ComplaintGenerator. "
+        "Install with: pip install transformers==4.46.0\n"
+        "GPU Requirements: CUDA-capable GPU with 4GB+ VRAM recommended for full functionality. "
+        "CPU-only mode available but slower."
+    ) from e
 
 try:
     import bitsandbytes
-    BITSANDBYTES_AVAILABLE = True
-except ImportError:
-    BITSANDBYTES_AVAILABLE = False
-    print("Warning: bitsandbytes not available. 4-bit quantization disabled.")
+except ImportError as e:
+    raise ImportError(
+        "bitsandbytes is required for 4-bit quantization in ComplaintGenerator. "
+        "Install with: pip install bitsandbytes==0.44.1\n"
+        "Note: bitsandbytes requires CUDA. For CPU-only systems, this dependency must still be "
+        "installed but use_4bit=False should be passed to the model."
+    ) from e
 
 
 class SymptomGenerator:
@@ -61,8 +68,8 @@ class SymptomGenerator:
 class ComplaintGenerator(nn.Module):
     """
     Generates natural language patient complaints from symptoms.
-    Uses Mistral-7B-Instruct with 4-bit quantization when available,
-    falls back to template-based generation otherwise.
+    Uses Mistral-7B-Instruct with 4-bit quantization.
+    Requires transformers and bitsandbytes to be installed.
     """
     
     def __init__(
@@ -80,19 +87,29 @@ class ComplaintGenerator(nn.Module):
         
         Args:
             model_name: Name of the LLM to use
-            use_pretrained: Whether to load pretrained LLM
-            use_4bit: Whether to use 4-bit quantization
+            use_pretrained: Whether to load pretrained LLM (must be True)
+            use_4bit: Whether to use 4-bit quantization (requires CUDA)
             max_new_tokens: Maximum tokens to generate
             temperature: Sampling temperature for diversity
             top_p: Top-p sampling parameter
             device: Device to load model on
+        
+        Raises:
+            ValueError: If use_pretrained is False
+            RuntimeError: If model loading fails
         """
         super().__init__()
+
+        if not use_pretrained:
+            raise ValueError(
+                "ComplaintGenerator requires use_pretrained=True. "
+                "Template-based fallback has been removed. "
+                "Ensure transformers and bitsandbytes are properly installed."
+            )
 
         self.conditions = RespiratoryConditions.get_all_conditions()
         self.symptom_generator = SymptomGenerator()
         self.current_presentation: Optional[PatientPresentation] = None
-        self.use_llm = use_pretrained and TRANSFORMERS_AVAILABLE
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.top_p = top_p
@@ -122,184 +139,66 @@ class ComplaintGenerator(nn.Module):
             "awful",
         ]
 
-        # Try to load LLM
-        if self.use_llm:
-            try:
-                self._load_llm(model_name, use_4bit)
-            except Exception as e:
-                print(f"Warning: Could not load LLM: {e}")
-                print("Falling back to template-based generation")
-                self.use_llm = False
-                self._init_template_generator()
-        else:
-            self._init_template_generator()
+        # Load LLM
+        self._load_llm(model_name, use_4bit)
     
     def _load_llm(self, model_name: str, use_4bit: bool):
-        """Load the language model."""
-        print(f"Loading {model_name}...")
+        """
+        Load the language model.
         
-        if use_4bit and BITSANDBYTES_AVAILABLE and torch.cuda.is_available():
-            # 4-bit quantization for memory efficiency
-            quantization_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.float16,
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type="nf4"
-            )
+        Args:
+            model_name: Name of the model to load
+            use_4bit: Whether to use 4-bit quantization
+        
+        Raises:
+            RuntimeError: If model loading fails
+        """
+        try:
+            print(f"Loading {model_name}...")
             
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                quantization_config=quantization_config,
-                device_map="auto",
-                trust_remote_code=True
-            )
-        else:
-            # Load without quantization
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                device_map="auto" if torch.cuda.is_available() else None,
-                trust_remote_code=True
-            )
-        
-        # Set padding token
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-        
-        self.model.eval()
-        print(f"✓ Loaded {model_name} successfully")
-    
-    def _init_template_generator(self):
-        """Initialize template-based fallback generator."""
-        self.model = None
-        self.tokenizer = None
-        
-        # Add a learnable embedding for template selection (for optimizer compatibility)
-        self.template_embeddings = nn.Parameter(torch.randn(8, 64))  # 8 templates
-        
-        # Templates for generating complaints with proper grammar
-        # Use {symptoms_experiencing} for "experiencing X" form
-        # Use {main_symptom_gerund} for gerund form (e.g., "wheezing")
-        # Use {main_symptom_phrase} for phrase form (e.g., "trouble breathing")
-        self.conditions = RespiratoryConditions.get_all_conditions()
-        
-        # Templates for generating complaints with proper grammar
-        # Use {symptoms_experiencing} for "experiencing X" form
-        # Use {main_symptom_gerund} for gerund form (e.g., "wheezing")
-        # Use {main_symptom_phrase} for phrase form (e.g., "trouble breathing")
-        self.templates = [
-            "I've been experiencing {symptoms} for the past {time}. It's really {severity}.",
-            "Doctor, I have {symptoms} and I'm {feeling}. This started {time} ago.",
-            "I'm having {main_symptom_phrase}. It's been {severity} since {time}.",
-            "Help, I {main_symptom_action}. I also have {other_symptom_phrase}.",
-            "I've been {main_symptom_gerund} and feeling {feeling}. It's been going on for {time}.",
-            "My {symptoms_phrase_form} won't go away. Started {time} and getting {severity}.",
-            "Really worried about {main_symptom_phrase}. Also experiencing {other_symptom_phrase}.",
-            "Can't seem to shake this {main_symptom_noun}. {other_symptom_phrase} too.",
-        ]
-        
-        # Grammar rules for symptom transformation
-        self.symptom_grammar_rules = {
-            # Map symptoms to their proper grammatical forms
-            "wheezing": {
-                "gerund": "wheezing",
-                "noun": "wheezing",
-                "phrase": "my wheezing",
-                "action": "can't stop wheezing"
-            },
-            "shortness_of_breath": {
-                "gerund": "having shortness of breath",
-                "noun": "breathlessness", 
-                "phrase": "shortness of breath",
-                "action": "can't catch my breath"
-            },
-            "difficulty_breathing": {
-                "gerund": "having difficulty breathing",
-                "noun": "breathing difficulty",
-                "phrase": "difficulty breathing",
-                "action": "can't breathe properly"
-            },
-            "coughing": {
-                "gerund": "coughing",
-                "noun": "cough",
-                "phrase": "my cough",
-                "action": "can't stop coughing"
-            },
-            "cough": {
-                "gerund": "coughing",
-                "noun": "cough",
-                "phrase": "my cough",
-                "action": "can't stop coughing"
-            },
-            "chest_pain": {
-                "gerund": "experiencing chest pain",
-                "noun": "chest pain",
-                "phrase": "chest pain",
-                "action": "have sharp chest pain"
-            },
-            "chest_tightness": {
-                "gerund": "experiencing chest tightness",
-                "noun": "chest tightness",
-                "phrase": "tight chest",
-                "action": "feel chest tightness"
-            },
-            "tight_chest": {
-                "gerund": "experiencing chest tightness",
-                "noun": "chest tightness",
-                "phrase": "tight chest",
-                "action": "feel tightness in my chest"
-            },
-            "fever": {
-                "gerund": "running a fever",
-                "noun": "fever",
-                "phrase": "my fever",
-                "action": "have a fever"
-            },
-            "breathless": {
-                "gerund": "feeling breathless",
-                "noun": "breathlessness",
-                "phrase": "breathlessness",
-                "action": "feel breathless"
-            },
-            "breathlessness": {
-                "gerund": "feeling breathless",
-                "noun": "breathlessness",
-                "phrase": "breathlessness",
-                "action": "feel breathless"
-            },
-            "gasping_for_air": {
-                "gerund": "gasping for air",
-                "noun": "breathlessness",
-                "phrase": "gasping for air",
-                "action": "can't stop gasping for air"
-            },
-            "gasping for air": {
-                "gerund": "gasping for air",
-                "noun": "breathlessness",
-                "phrase": "gasping for air",
-                "action": "can't stop gasping for air"
-            },
-            "can't breathe": {
-                "gerund": "having trouble breathing",
-                "noun": "breathing difficulty",
-                "phrase": "trouble breathing",
-                "action": "can't breathe"
-            },
-            "can't catch my breath": {
-                "gerund": "having trouble catching my breath",
-                "noun": "breathlessness",
-                "phrase": "trouble catching my breath",
-                "action": "can't catch my breath"
-            },
-            "wheezy": {
-                "gerund": "feeling wheezy",
-                "noun": "wheezing",
-                "phrase": "wheezing",
-                "action": "feel wheezy"
-            }
-        }
+            if use_4bit and torch.cuda.is_available():
+                # 4-bit quantization for memory efficiency
+                quantization_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4"
+                )
+                
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    quantization_config=quantization_config,
+                    device_map="auto",
+                    trust_remote_code=True
+                )
+            else:
+                # Load without quantization
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                    device_map="auto" if torch.cuda.is_available() else None,
+                    trust_remote_code=True
+                )
+            
+            # Set padding token
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            self.model.eval()
+            print(f"✓ Loaded {model_name} successfully")
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load model {model_name}. "
+                f"Error: {e}\n"
+                f"Requirements:\n"
+                f"- transformers==4.46.0\n"
+                f"- bitsandbytes==0.44.1 (for 4-bit quantization)\n"
+                f"- torch==2.5.1\n"
+                f"- CUDA GPU with 4GB+ VRAM recommended (CPU mode available with use_4bit=False)\n"
+                f"- Internet connection to download model from HuggingFace Hub"
+            ) from e
     
     def _create_prompt(self, presentation: PatientPresentation) -> str:
         """
@@ -346,9 +245,15 @@ Patient complaint: [/INST]"""
 
         Returns:
             Generated complaint string
+            
+        Raises:
+            RuntimeError: If LLM generation fails
         """
-        if not self.use_llm or self.model is None:
-            return self._generate_with_template(presentation)
+        if self.model is None:
+            raise RuntimeError(
+                "Model not loaded. Ensure ComplaintGenerator was initialized with use_pretrained=True "
+                "and model loaded successfully."
+            )
 
         try:
             prompt = self._create_prompt(presentation)
@@ -383,192 +288,23 @@ Patient complaint: [/INST]"""
             complaint = complaint.split('\n')[0]  # Take first line
             complaint = complaint[:500]  # Limit length
             
-            return (
-                complaint
-                if complaint
-                else self._generate_with_template(presentation)
-            )
+            if not complaint:
+                raise RuntimeError("Model generated empty complaint")
+            
+            return complaint
 
         except Exception as e:
-            print(f"Warning: LLM generation failed: {e}")
-            return self._generate_with_template(presentation)
-
-    def _generate_with_template(
-        self,
-        presentation: PatientPresentation,
-        use_lay_terms: bool = True,
-    ) -> str:
-        """
-        Generate complaint using templates (fallback method).
-
-        Args:
-            presentation: Structured patient presentation
-            use_lay_terms: Whether to use lay language
-
-        Returns:
-            Generated complaint string
-        """
-        symptoms = presentation.symptoms
-
-        if not symptoms:
-            return "I'm not feeling well."
-
-        # Get lay terms if available
-        if use_lay_terms and presentation.condition_code in self.conditions:
-            lay_terms = self.conditions[presentation.condition_code]["lay_terms"]
-            if lay_terms:
-                # Use lay terms for some symptoms
-                display_symptoms = []
-                max_terms = presentation.vocabulary_profile.max_terms_per_response
-                for symptom in symptoms[:max_terms]:
-                    canonical = symptom
-                    if random.random() < 0.5 and lay_terms:
-                        display_symptoms.append(random.choice(lay_terms))
-                    else:
-                        display_symptoms.append(
-                            self._format_symptom(
-                                presentation, canonical, form="phrase"
-                            )
-                        )
-            else:
-                display_symptoms = [
-                    self._format_symptom(presentation, s, form="phrase")
-                    for s in symptoms[: presentation.vocabulary_profile.max_terms_per_response]
-                ]
-        else:
-            display_symptoms = [
-                self._format_symptom(presentation, s, form="phrase")
-                for s in symptoms[: presentation.vocabulary_profile.max_terms_per_response]
-            ]
-
-        # Select template
-        template = random.choice(self.templates)
-        
-        # Fill in template with grammatically correct forms
-        complaint = template
-        
-        # Handle {symptoms} - basic list
-        if "{symptoms}" in complaint:
-            symptoms_text = " and ".join(display_symptoms[:2])
-            complaint = complaint.replace("{symptoms}", symptoms_text)
-        
-        # Handle {symptoms_phrase_form} - symptoms in phrase form (for "My X" constructions)
-        if "{symptoms_phrase_form}" in complaint:
-            symptom_phrases = [
-                self._format_symptom(presentation, s, form="phrase")
-                for s in symptoms[:2]
-            ]
-            symptoms_phrase = " and ".join(symptom_phrases)
-            complaint = complaint.replace("{symptoms_phrase_form}", symptoms_phrase)
-
-        # Handle {main_symptom_gerund} - gerund form
-        if "{main_symptom_gerund}" in complaint:
-            main = symptoms[0] if symptoms else "not feeling well"
-            main_gerund = self._format_symptom(presentation, main, form="gerund")
-            complaint = complaint.replace("{main_symptom_gerund}", main_gerund)
-
-        # Handle {main_symptom_noun} - noun form
-        if "{main_symptom_noun}" in complaint:
-            main = symptoms[0] if symptoms else "illness"
-            main_noun = self._format_symptom(presentation, main, form="noun")
-            complaint = complaint.replace("{main_symptom_noun}", main_noun)
-
-        # Handle {main_symptom_phrase} - phrase form
-        if "{main_symptom_phrase}" in complaint:
-            main = symptoms[0] if symptoms else "not feeling well"
-            main_phrase = self._format_symptom(presentation, main, form="phrase")
-            complaint = complaint.replace("{main_symptom_phrase}", main_phrase)
-
-        # Handle {main_symptom_action} - action form
-        if "{main_symptom_action}" in complaint:
-            main = symptoms[0] if symptoms else "feel unwell"
-            main_action = self._format_symptom(presentation, main, form="action")
-            complaint = complaint.replace("{main_symptom_action}", main_action)
-
-        # Handle {other_symptom_phrase} - other symptoms in phrase form
-        if "{other_symptom_phrase}" in complaint:
-            other = symptoms[1] if len(symptoms) > 1 else "feeling unwell"
-            other_phrase = self._format_symptom(presentation, other, form="phrase")
-            complaint = complaint.replace("{other_symptom_phrase}", other_phrase)
-        
-        # Replace standard placeholders
-        complaint = complaint.replace("{severity}", random.choice(self.severity_terms))
-        complaint = complaint.replace("{time}", random.choice(self.time_terms))
-        complaint = complaint.replace("{feeling}", random.choice(self.feeling_terms))
-        
-        return complaint
-    
-    def _get_symptom_form(self, symptom: str, form: str) -> str:
-        """
-        Get the grammatically correct form of a symptom.
-        
-        Args:
-            symptom: Raw symptom string (e.g., "wheezing", "shortness_of_breath")
-            form: Desired grammatical form ("gerund", "noun", "phrase", "action")
-            
-        Returns:
-            Grammatically correct symptom form
-        """
-        # Normalize symptom
-        symptom_key = symptom.lower().replace(' ', '_')
-        
-        # Also try with spaces for lay terms
-        symptom_key_spaced = symptom.lower()
-        
-        # Check if we have grammar rules for this symptom
-        if symptom_key in self.symptom_grammar_rules:
-            return self.symptom_grammar_rules[symptom_key].get(form, symptom.replace('_', ' '))
-        if symptom_key_spaced in self.symptom_grammar_rules:
-            return self.symptom_grammar_rules[symptom_key_spaced].get(form, symptom)
-        
-        # Fallback: apply default grammar rules
-        symptom_clean = symptom.replace('_', ' ')
-        
-        if form == "gerund":
-            # Check if it's already a gerund (ends in -ing)
-            if symptom_clean.endswith('ing'):
-                return symptom_clean
-            # Check if it starts with "can't" - convert to proper form
-            if symptom_clean.startswith("can't"):
-                base = symptom_clean.replace("can't ", "")
-                return f"having trouble {base}"
-            # For phrases with "of", prepend "having"
-            if ' of ' in symptom_clean or symptom_clean.startswith('difficulty'):
-                return f"having {symptom_clean}"
-            # For most symptoms, add "experiencing"
-            return f"experiencing {symptom_clean}"
-        elif form == "noun":
-            # Handle "can't X" phrases
-            if symptom_clean.startswith("can't"):
-                return "breathing difficulty"
-            # Remove trailing -ing if present and convert to noun form
-            if symptom_clean.endswith('ing'):
-                return symptom_clean  # Keep as-is (e.g., "wheezing" is both verb and noun)
-            # Handle adjectives
-            if symptom_clean in ['breathless', 'wheezy', 'dizzy']:
-                return symptom_clean + 'ness'
-            return symptom_clean
-        elif form == "phrase":
-            # Handle "can't X" phrases
-            if symptom_clean.startswith("can't"):
-                base = symptom_clean.replace("can't ", "")
-                return f"trouble {base if base else 'breathing'}"
-            return symptom_clean
-        elif form == "action":
-            # Create action phrase (e.g., "can't stop X" or "have X")
-            if symptom_clean.startswith("can't"):
-                return symptom_clean  # Already an action
-            if symptom_clean.endswith('ing'):
-                return f"can't stop {symptom_clean}"
-            return f"have {symptom_clean}"
-        
-        return symptom_clean
+            raise RuntimeError(
+                f"LLM generation failed: {e}\n"
+                f"Ensure model is properly loaded and device has sufficient memory."
+            ) from e
 
     def _format_symptom(
         self, presentation: PatientPresentation, symptom: str, form: str
     ) -> str:
-        """Combine grammar rules with the patient's vocabulary profile."""
-        base = self._get_symptom_form(symptom, form)
+        """Format symptom according to vocabulary profile."""
+        # Simple formatting - just clean up underscores
+        base = symptom.replace('_', ' ')
         return presentation.vocabulary_profile.translate(
             symptom, form=form, default=base
         )
@@ -580,7 +316,7 @@ Patient complaint: [/INST]"""
         symptoms: Optional[List[str]] = None,
         num_symptoms: Optional[int] = None,
         vocabulary_profile: Optional[VocabularyProfile] = None,
-        use_lay_terms: bool = True,
+        use_lay_terms: bool = True,  # Kept for API compatibility but not used
     ) -> PatientPresentation:
         """Generate a natural language patient complaint with metadata."""
 
@@ -612,12 +348,7 @@ Patient complaint: [/INST]"""
                     vocabulary_profile=vocabulary_profile,
                 )
 
-        if self.use_llm:
-            complaint_text = self._generate_with_llm(presentation)
-        else:
-            complaint_text = self._generate_with_template(
-                presentation, use_lay_terms=use_lay_terms
-            )
+        complaint_text = self._generate_with_llm(presentation)
 
         presentation.complaint_text = complaint_text
         self.current_presentation = presentation
