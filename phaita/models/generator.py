@@ -703,7 +703,11 @@ Patient complaint: [/INST]"""
                     f"I'm feeling {feeling} because of {' and '.join(phrases)}."
                 )
 
-        presentation.record_response(prompt, response)
+        presentation.record_response(
+            prompt,
+            response,
+            metadata={"symptom_mentions": list(selected)},
+        )
         return response
 
     def forward(

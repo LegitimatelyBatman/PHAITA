@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from ..models.bayesian_network import BayesianSymptomNetwork
 
@@ -53,9 +53,19 @@ class PatientPresentation:
     complaint_text: Optional[str] = None
     follow_up_history: List[Dict[str, str]] = field(default_factory=list)
 
-    def record_response(self, prompt: str, response: str) -> None:
+    def record_response(
+        self,
+        prompt: str,
+        response: str,
+        *,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Record an exchange to keep the simulation stateful."""
-        self.follow_up_history.append({"prompt": prompt, "response": response})
+
+        entry: Dict[str, Any] = {"prompt": prompt, "response": response}
+        if metadata:
+            entry.update(metadata)
+        self.follow_up_history.append(entry)
 
 
 class PatientSimulator:
