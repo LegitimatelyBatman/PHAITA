@@ -49,17 +49,18 @@ python cli.py diagnose --complaint "I can't catch my breath"
 ### Python API Example
 ```python
 from phaita import AdversarialTrainer
-from phaita.models import ComplaintGenerator, DiagnosisDiscriminator
+from phaita.models import ComplaintGenerator, DiagnosisDiscriminator, SymptomGenerator
 
+symptom_gen = SymptomGenerator()
 generator = ComplaintGenerator()
 discriminator = DiagnosisDiscriminator()
 trainer = AdversarialTrainer(generator=generator, discriminator=discriminator)
 
-symptoms = ["shortness_of_breath", "wheezing"]
-complaint = generator.generate_complaint(symptoms, "J45.9")
-print(complaint)
+presentation = symptom_gen.generate_symptoms("J45.9")
+presentation = generator.generate_complaint(presentation=presentation)
+print(presentation.complaint_text)
 
-predictions = discriminator.predict_diagnosis([complaint], top_k=3)
+predictions = discriminator.predict_diagnosis([presentation.complaint_text], top_k=3)
 for candidate in predictions[0]:
     print(candidate["condition_code"], candidate["probability"])
 ```

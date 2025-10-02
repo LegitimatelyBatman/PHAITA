@@ -229,12 +229,13 @@ def demo_command(args):
         # Sample random condition
         code, condition_data = RespiratoryConditions.get_random_condition()
         
-        # Generate symptoms
-        symptoms = symptom_gen.bayesian_network.sample_symptoms(code)
-        
-        # Generate patient complaint
-        complaint = complaint_gen.generate_complaint(symptoms, code)
-        
+        # Generate structured presentation
+        presentation = symptom_gen.generate_symptoms(code)
+        presentation = complaint_gen.generate_complaint(
+            condition_code=code, presentation=presentation
+        )
+        complaint = presentation.complaint_text
+
         # Get diagnosis predictions
         predictions = discriminator.predict_diagnosis([complaint], top_k=args.top_k)
         report = format_differential_report(predictions[0])
@@ -244,7 +245,7 @@ def demo_command(args):
 
         print(f"\n🩺 Example {i+1}:")
         print(f"   True Condition: {code} - {condition_data['name']}")
-        print(f"   Symptoms: {', '.join(symptoms[:3])}...")
+        print(f"   Symptoms: {', '.join(presentation.symptoms[:3])}...")
         print(f"   Patient Says: \"{complaint}\"")
         print(f"   AI Primary Diagnosis: {pred_code} (probability: {confidence:.3f})")
         print("\n   Differential guidance:")
@@ -283,14 +284,24 @@ def generate_command(args):
             code, _ = RespiratoryConditions.get_random_condition()
         
         # Generate symptoms and complaint
-        symptoms = symptom_gen.bayesian_network.sample_symptoms(code)
-        complaint = complaint_gen.generate_complaint(symptoms, code)
-        
+        presentation = symptom_gen.generate_symptoms(code)
+        presentation = complaint_gen.generate_complaint(
+            condition_code=code, presentation=presentation
+        )
+
         results.append({
             'condition_code': code,
             'condition_name': RespiratoryConditions.get_condition_by_code(code)['name'],
-            'symptoms': symptoms,
-            'complaint': complaint
+            'symptoms': presentation.symptoms,
+            'complaint': presentation.complaint_text,
+            'symptom_probabilities': presentation.symptom_probabilities,
+            'misdescription_weights': presentation.misdescription_weights,
+            'vocabulary_profile': {
+                'allowed_terms': presentation.vocabulary_profile.allowed_terms,
+                'term_overrides': presentation.vocabulary_profile.term_overrides,
+                'register': presentation.vocabulary_profile.register,
+                'max_terms_per_response': presentation.vocabulary_profile.max_terms_per_response,
+            }
         })
     
     # Output results
@@ -559,7 +570,11 @@ def challenge_command(args):
 
         for i, case in enumerate(challenge_cases):
             try:
-                complaint = complaint_generator.generate_complaint(case["symptoms"], case["condition"])
+                presentation = complaint_generator.generate_complaint(
+                    condition_code=case["condition"],
+                    symptoms=case["symptoms"],
+                )
+                complaint = presentation.complaint_text
             except Exception:
                 complaint = _generate_complaint_from_symptoms(case["symptoms"], case.get("metadata", {}))
 

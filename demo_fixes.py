@@ -87,9 +87,9 @@ def demo_task3():
     
     print("\nAFTER (with grammar fixes):")
     for i in range(5):
-        symptoms = gen.generate_symptoms('J45.9')
-        complaint = comp_gen.generate_complaint(symptoms, 'J45.9')
-        print(f"  ✓ {complaint}")
+        presentation = gen.generate_symptoms('J45.9')
+        presentation = comp_gen.generate_complaint(presentation=presentation)
+        print(f"  ✓ {presentation.complaint_text}")
     
     # Show grammar forms
     print("\n✓ Grammar rules applied:")

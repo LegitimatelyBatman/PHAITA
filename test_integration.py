@@ -134,8 +134,9 @@ def test_task3_grammar_fixes():
         all_complaints = []
         
         for i in range(200):
-            symptoms = gen.generate_symptoms('J45.9')
-            complaint = comp_gen.generate_complaint(symptoms, 'J45.9')
+            presentation = gen.generate_symptoms('J45.9')
+            presentation = comp_gen.generate_complaint(presentation=presentation)
+            complaint = presentation.complaint_text
             all_complaints.append(complaint)
             
             # Check for bad patterns
