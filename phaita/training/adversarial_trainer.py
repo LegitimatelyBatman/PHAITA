@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple, Optional
 import random
 from tqdm import tqdm
 import logging
@@ -119,7 +119,7 @@ class AdversarialTrainer:
     Uses real gradient computation and proper adversarial training.
     """
     
-    def __init__(self, 
+    def __init__(self,
                  generator_lr: float = 2e-5,
                  discriminator_lr: float = 1e-4,
                  diversity_weight: float = 0.1,
@@ -128,7 +128,8 @@ class AdversarialTrainer:
                  use_forum_data: bool = True,
                  use_pretrained_generator: bool = False,
                  use_pretrained_discriminator: bool = False,
-                 device: Optional[str] = None):
+                 device: Optional[str] = None,
+                 real_dataset: Optional[List[Dict[str, Any]]] = None):
         
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -192,10 +193,15 @@ class AdversarialTrainer:
         # Setup logging
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
-        
+
         # Load forum data if enabled
         if self.use_forum_data:
             self._load_forum_data()
+
+        # Physician-verified corpus
+        self.real_dataset: List[Dict[str, Any]] = []
+        if real_dataset:
+            self._load_real_dataset(real_dataset)
     
     def _load_forum_data(self):
         """Load forum complaints for curriculum learning."""
@@ -205,6 +211,78 @@ class AdversarialTrainer:
         except Exception as e:
             self.logger.warning(f"Failed to load forum data: {e}")
             self.forum_complaints = []
+
+    def _load_real_dataset(self, dataset: List[Dict[str, Any]]) -> None:
+        """Pre-tokenize physician-verified complaints for discriminator training."""
+        tokenizer = getattr(self.discriminator, "tokenizer", None)
+
+        for entry in dataset:
+            text: Optional[str] = None
+            label: Any = None
+
+            if isinstance(entry, dict):
+                text = entry.get("text") or entry.get("complaint") or entry.get("utterance")
+                label = entry.get("label") or entry.get("condition_code")
+            elif isinstance(entry, (list, tuple)) and len(entry) == 2:
+                text, label = entry
+            else:
+                self.logger.warning("Skipping malformed real dataset entry: %s", entry)
+                continue
+
+            if not text or label is None:
+                self.logger.warning("Skipping real dataset entry with missing text/label: %s", entry)
+                continue
+
+            label_idx: Optional[int] = None
+            if isinstance(label, str):
+                if label in self.condition_codes:
+                    label_idx = self.condition_codes.index(label)
+                else:
+                    self.logger.warning("Unknown condition code '%s' in real dataset", label)
+                    continue
+            elif isinstance(label, int):
+                if 0 <= label < len(self.condition_codes):
+                    label_idx = label
+                else:
+                    self.logger.warning("Label index %s out of range for real dataset entry", label)
+                    continue
+            else:
+                self.logger.warning("Unsupported label type '%s' in real dataset", type(label))
+                continue
+
+            tokenized_sample: Optional[Dict[str, torch.Tensor]] = None
+            if tokenizer is not None:
+                try:
+                    encoded = tokenizer(
+                        [text],
+                        padding="longest",
+                        truncation=True,
+                        max_length=256,
+                        return_tensors="pt"
+                    )
+                    tokenized_sample = {k: v.squeeze(0).cpu() for k, v in encoded.items()}
+                except Exception as exc:
+                    self.logger.warning("Tokenization failed for real dataset entry: %s", exc)
+
+            self.real_dataset.append({
+                "text": text,
+                "label_idx": label_idx,
+                "label_code": self.condition_codes[label_idx],
+                "tokenized": tokenized_sample,
+            })
+
+        if not self.real_dataset:
+            self.logger.warning("Real dataset provided but no valid entries were loaded")
+        else:
+            self.logger.info("Loaded %d physician-verified complaints", len(self.real_dataset))
+
+    def _sample_real_dataset(self, batch_size: int) -> List[Dict[str, Any]]:
+        """Randomly sample a batch from the physician-verified corpus."""
+        if not self.real_dataset:
+            return []
+
+        sample_size = min(batch_size, len(self.real_dataset))
+        return random.sample(self.real_dataset, sample_size)
     
     def _get_curriculum_forum_ratio(self, epoch: int, total_epochs: int) -> float:
         """Get the ratio of forum data to use based on curriculum learning schedule."""
@@ -444,14 +522,20 @@ class AdversarialTrainer:
             # Training steps
             for step in range(10):  # Multiple steps per epoch
                 
-                # Generate mixed training data based on curriculum
-                if self.use_curriculum_learning and self.forum_complaints:
+                # Always generate a fresh batch of synthetic complaints for the generator
+                fake_complaints, _, fake_labels = self.generate_training_batch(batch_size)
+
+                # Prefer curated physician-verified data when available
+                if self.real_dataset:
+                    real_samples = self._sample_real_dataset(batch_size)
+                    real_complaints = [sample["text"] for sample in real_samples]
+                    real_label_indices = [sample["label_idx"] for sample in real_samples]
+                    real_labels = torch.tensor(real_label_indices, dtype=torch.long, device=self.device)
+                elif self.use_curriculum_learning and self.forum_complaints:
                     real_complaints, real_labels = self._sample_mixed_training_data(batch_size, forum_ratio)
-                    fake_complaints, _, fake_labels = self.generate_training_batch(batch_size)
                 else:
-                    # Generate training data (original approach)
-                    fake_complaints, _, fake_labels = self.generate_training_batch(batch_size)
-                    real_complaints = fake_complaints  # Using synthetic as "real" for now
+                    # Fall back to synthetic data when no curated corpus is available
+                    real_complaints = fake_complaints
                     real_labels = fake_labels
                 
                 # Train discriminator
