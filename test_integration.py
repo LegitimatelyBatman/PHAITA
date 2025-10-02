@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""
-Integration test for PHAITA critical bug fixes.
-Tests Tasks 1-4 to ensure all components work together.
-"""
+"""Integration test for PHAITA critical bug fixes."""
 
+import json
 import sys
+import tempfile
+from datetime import datetime
 from pathlib import Path
 
 # Add package to path
@@ -13,7 +13,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 from phaita.training.adversarial_trainer import AdversarialTrainer
 from phaita.models.generator import SymptomGenerator, ComplaintGenerator
 from phaita.models.discriminator import DiagnosisDiscriminator
-from phaita.data.forum_scraper import ForumScraper, ForumDataAugmentation
+from phaita.data.forum_scraper import (
+    ForumScraper,
+    ForumDataAugmentation,
+    PatientInfoClient,
+)
 
 
 def test_task1_generator_reference():
@@ -185,83 +189,110 @@ def test_task3_grammar_fixes():
 
 def test_task4_forum_data_generation():
     """Test Task 4: Realistic forum data generation."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST TASK 4: Realistic Forum Data Generation")
-    print("="*70)
-    
+    print("=" * 70)
+
     try:
-        scraper = ForumScraper()
-        posts = scraper.scrape_reddit_health(max_posts=20)
-        
-        print(f"Generated {len(posts)} forum posts")
-        
-        # Check condition-specific symptoms
-        condition_keywords = {
-            'asthma': ['wheezy', 'tight chest', "can't breathe"],
-            'pneumonia': ['coughing up', 'chest hurts', 'burning up', 'fever'],
-            'copd': ["can't catch", 'wheezy', 'coughing up'],
-            'bronchitis': ['hacking cough', 'coughing up', 'chest hurts']
-        }
-        
-        # Verify posts have realistic symptom combinations
-        condition_matches = {cond: 0 for cond in condition_keywords.keys()}
-        
-        for post in posts:
-            content_lower = post.content.lower()
-            for condition, keywords in condition_keywords.items():
-                matches = sum(1 for kw in keywords if kw in content_lower)
-                if matches >= 1:  # At least one keyword from the condition
-                    condition_matches[condition] += 1
-        
-        print("\nCondition-specific symptom distribution:")
-        for condition, count in condition_matches.items():
-            print(f"  {condition}: {count} posts")
-        
-        # Check for variation (2-4 symptoms)
-        symptom_counts = [len(post.lay_terms) for post in posts]
-        min_symptoms = min(symptom_counts)
-        max_symptoms = max(symptom_counts)
-        avg_symptoms = sum(symptom_counts) / len(symptom_counts)
-        
-        print(f"\nSymptom variation:")
-        print(f"  Min symptoms per post: {min_symptoms}")
-        print(f"  Max symptoms per post: {max_symptoms}")
-        print(f"  Avg symptoms per post: {avg_symptoms:.1f}")
-        
-        # Show sample posts
-        print("\nSample forum posts:")
-        for i, post in enumerate(posts[:3]):
-            print(f"\n  Post {i+1}:")
-            print(f"    Content: {post.content}")
-            print(f"    Symptoms: {post.lay_terms}")
-        
-        # Test forum complaints from augmenter
-        augmenter = ForumDataAugmentation()
-        complaints = augmenter.get_forum_complaints_for_pretraining(max_complaints=50)
-        
-        # Check for grammar issues
-        bad_grammar = []
-        for complaint in complaints:
-            if 'Can\'t stop can\'t' in complaint or 'Having can\'t' in complaint:
-                bad_grammar.append(complaint)
-        
-        print(f"\nGenerated {len(complaints)} forum-style complaints")
-        print(f"Grammar issues: {len(bad_grammar)}")
-        
-        # Validation
-        assert len(posts) == 20, "Should generate 20 posts"
-        assert min_symptoms >= 2, "Should have at least 2 symptoms per post"
-        assert max_symptoms <= 4, "Should have at most 4 symptoms per post"
-        assert len(bad_grammar) == 0, "Should have no grammar issues"
-        assert sum(condition_matches.values()) > 0, "Should have condition-specific symptoms"
-        
-        print("\n✓ Condition-specific symptom mappings")
-        print("✓ 2-4 symptoms per post variation")
-        print("✓ No grammar issues in forum complaints")
-        print("✓ Realistic symptom combinations")
+        fixture_dir = Path(__file__).parent / "tests" / "fixtures"
+        reddit_data = json.loads((fixture_dir / "reddit_sample.json").read_text())
+        patient_html = (fixture_dir / "patient_info_sample.html").read_text()
+
+        class FixtureRedditClient:
+            def __init__(self, records):
+                self.records = records
+
+            def fetch_posts(self, max_posts: int):
+                posts = []
+                for record in self.records[:max_posts]:
+                    created = datetime.fromisoformat(record["created_at"].replace("Z", "+00:00"))
+                    posts.append(
+                        {
+                            "id": record["id"],
+                            "title": record["title"],
+                            "content": record["content"],
+                            "created_at": created,
+                        }
+                    )
+                return posts
+
+        class FixtureResponse:
+            def __init__(self, text: str):
+                self.text = text
+                self.status_code = 200
+
+            def raise_for_status(self) -> None:
+                return None
+
+        class FixtureSession:
+            def __init__(self, html: str):
+                self.html = html
+
+            def get(self, url: str, timeout: int = 10):
+                return FixtureResponse(self.html)
+
+        reddit_client = FixtureRedditClient(reddit_data)
+        patient_client = PatientInfoClient(
+            forum_paths=["/fixtures/asthma"],
+            session=FixtureSession(patient_html),
+            rate_limit_seconds=0.0,
+        )
+
+        with tempfile.TemporaryDirectory() as cache_dir:
+            scraper = ForumScraper(
+                cache_dir=cache_dir,
+                reddit_client=reddit_client,
+                patient_info_client=patient_client,
+            )
+
+            reddit_posts = scraper.scrape_reddit_health(max_posts=3)
+            patient_posts = scraper.scrape_patient_info(max_posts=2)
+
+            scraper.save_posts(reddit_posts, "reddit_posts.json")
+            scraper.save_posts(patient_posts, "patient_info_posts.json")
+
+            cached_reddit_posts = scraper.load_posts("reddit_posts.json")
+            cached_patient_posts = scraper.load_posts("patient_info_posts.json")
+
+        print(f"Loaded {len(reddit_posts)} Reddit posts and {len(patient_posts)} Patient.info posts")
+
+        assert len(reddit_posts) == 3, "Reddit fixture should yield 3 posts"
+        assert len(patient_posts) == 2, "Patient.info fixture should yield 2 posts"
+        assert cached_reddit_posts[0].content == reddit_posts[0].content
+        assert cached_patient_posts[0].lay_terms, "Patient.info posts should extract lay terms"
+
+        augmenter = ForumDataAugmentation(forum_posts=reddit_posts)
+        complaints = augmenter.get_forum_complaints_for_pretraining(max_complaints=3)
+        assert complaints == [post.content for post in reddit_posts[:3]]
+
+        augmented = augmenter.augment_complaints_with_lay_terms(
+            [
+                "Patient reports dyspnea and chest pain",
+                "Experiencing productive cough and fever",
+            ],
+            ["J45.9", "J18.9"],
+        )
+
+        print("\nSample Reddit post:")
+        print(f"  Title: {reddit_posts[0].title}")
+        print(f"  Content: {reddit_posts[0].content}")
+        print(f"  Lay terms: {reddit_posts[0].lay_terms}")
+
+        print("\nSample Patient.info post:")
+        print(f"  Title: {patient_posts[0].title}")
+        print(f"  Content: {patient_posts[0].content}")
+        print(f"  Lay terms: {patient_posts[0].lay_terms}")
+
+        print("\nAugmented complaints:")
+        for item in augmented:
+            print(f"  - {item}")
+
+        print("\n✓ Fixture-driven clients exercised the real scraper")
+        print("✓ Posts persisted and reloaded from cache")
+        print("✓ Lay language mappings applied to scraped content")
         print("\n✅ TASK 4 PASSED")
         return True
-        
+
     except Exception as e:
         print(f"\n❌ TASK 4 FAILED: {e}")
         import traceback
