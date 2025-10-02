@@ -7,19 +7,52 @@ PHAITA is a research prototype for medical triage that pits a language-model com
 ## Overview
 - **Scope**: Ten respiratory conditions (ICD-10) with lay-language support.
 - **Goal**: Stress-test diagnostic models with challenging, human-like complaints.
-- **Status**: End-to-end demo pipeline with mock clinical workflows and configurable depth (template-only through full deep-learning stack).
+- **Status**: Production-ready deep-learning pipeline requiring GPU acceleration and transformer models.
+
+## System Requirements
+
+### Hardware Requirements
+PHAITA requires significant computational resources for the full deep-learning stack:
+
+- **GPU**: CUDA-capable GPU with **4GB+ VRAM** (8GB+ recommended for training)
+  - Required for 4-bit quantization with bitsandbytes
+  - CPU-only mode available but significantly slower (pass `use_4bit=False`)
+- **RAM**: 16GB+ system memory recommended
+- **Storage**: ~10GB for model weights (downloaded from HuggingFace Hub on first run)
+- **Network**: Internet connection required for initial model downloads
+
+### Software Dependencies
+Exact versions are required for compatibility:
+
+- **Python**: 3.10+ (3.12 recommended)
+- **PyTorch**: 2.5.1 (with CUDA 11.8+ for GPU support)
+- **Transformers**: 4.46.0 (HuggingFace)
+- **bitsandbytes**: 0.44.1 (for 4-bit model quantization, CUDA required)
+- **torch-geometric**: 2.6.1 (for Graph Neural Networks)
+
+See `requirements.txt` for complete dependency list.
+
+### Models Used
+The following models are automatically downloaded from HuggingFace Hub:
+
+- **Mistral-7B-Instruct-v0.2** (~7GB): Complaint and question generation
+- **microsoft/deberta-v3-base** (~440MB): Text encoding for diagnosis
+- **Bio_ClinicalBERT** or **bert-base-uncased** (~420MB): Realism scoring
+- **GPT-2** (~500MB): Perplexity evaluation
+
+**Note**: All models are now **required**. Template-based fallbacks have been removed to ensure consistent behavior and quality.
 
 ## Architecture Snapshot
 | Stage | Components | Purpose |
 |-------|------------|---------|
-| Complaint generation | Bayesian symptom sampler → (optional) Mistral 7B → template fallback | Produce varied patient narratives for a target condition. |
-| Diagnosis | DeBERTa-based encoder + symptom Graph Neural Network | Predict condition and flag synthetic complaints. |
-| Training loop | AdversarialTrainer with curriculum and diversity losses | Alternate generator/discriminator optimisation on synthetic + forum-style text. |
+| Complaint generation | Bayesian symptom sampler → Mistral-7B-Instruct (4-bit quantized) | Produce varied patient narratives for a target condition. |
+| Diagnosis | DeBERTa-v3-base encoder + Graph Attention Network (torch-geometric) | Predict condition and assess complaint realism. |
+| Training loop | AdversarialTrainer with curriculum and diversity losses | Alternate generator/discriminator optimization on synthetic + forum-style text. |
 
 ## Key Capabilities
 - **Synthetic-first pipeline**: Generates complaints, question prompts, and labeled datasets without patient data.
 - **Lay-language understanding**: Bidirectional mapping between medical and colloquial terms plus curated forum phrases.
-- **Configurable depth**: Run lightweight demos, or enable quantized LLM and full PyTorch training when resources allow.
+- **Production-ready**: Requires real transformer models and GPU acceleration for consistent results.
 - **Metrics and analysis**: Track diagnostic accuracy, diversity, realism, and failure cases from challenge evaluations.
 
 ## Getting Started
@@ -77,11 +110,13 @@ requests and respects a modest rate-limit by default.
 from phaita import AdversarialTrainer
 from phaita.models import ComplaintGenerator, DiagnosisDiscriminator, SymptomGenerator
 
+# Initialize models (requires GPU with 4GB+ VRAM or CPU with use_4bit=False)
 symptom_gen = SymptomGenerator()
-generator = ComplaintGenerator()
-discriminator = DiagnosisDiscriminator()
+generator = ComplaintGenerator(use_pretrained=True, use_4bit=True)  # Required: use_pretrained=True
+discriminator = DiagnosisDiscriminator(use_pretrained=True)  # Required: use_pretrained=True
 trainer = AdversarialTrainer(generator=generator, discriminator=discriminator)
 
+# Generate and diagnose
 presentation = symptom_gen.generate_symptoms("J45.9")
 presentation = generator.generate_complaint(presentation=presentation)
 print(presentation.complaint_text)
@@ -90,6 +125,8 @@ predictions = discriminator.predict_diagnosis([presentation.complaint_text], top
 for candidate in predictions[0]:
     print(candidate["condition_code"], candidate["probability"])
 ```
+
+**Note**: All models now require `use_pretrained=True` (the default). Attempting to use `use_pretrained=False` will raise a `ValueError`.
 
 ## Repository Guide
 ```
