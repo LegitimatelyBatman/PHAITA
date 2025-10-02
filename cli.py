@@ -130,6 +130,7 @@ def _run_triage_dialogue(
         return ranked_predictions
 
     ranked = predict_and_print("\n🔍 Initial differential:")
+    engine.update_differential(ranked)
 
     while not engine.should_present_diagnosis():
         prompt = engine.next_prompt()
@@ -150,6 +151,7 @@ def _run_triage_dialogue(
         )
 
         ranked = predict_and_print("\n🔄 Updated differential:") or ranked
+        engine.update_differential(ranked)
 
     return turns, ranked
 

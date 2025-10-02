@@ -6,6 +6,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Deque, Iterable, List, Optional, Sequence, Set
 
+from ..triage.question_strategy import ExpectedInformationGainStrategy
+
 
 @dataclass
 class ConversationTurn:
@@ -32,12 +34,18 @@ class ConversationEngine:
         min_symptom_count: int = 3,
         max_no_progress_turns: int = 2,
         max_generation_attempts: int = 3,
+        candidate_pool_size: int = 3,
+        information_gain_threshold: float = 0.02,
+        question_selection_strategy: Optional[ExpectedInformationGainStrategy] = None,
     ) -> None:
         self.question_generator = question_generator
         self.max_questions = max_questions
         self.min_symptom_count = min_symptom_count
         self.max_no_progress_turns = max_no_progress_turns
         self.max_generation_attempts = max_generation_attempts
+        self.candidate_pool_size = candidate_pool_size
+        self.information_gain_threshold = information_gain_threshold
+        self.question_strategy = question_selection_strategy or ExpectedInformationGainStrategy()
 
         self._symptom_order: List[str] = []
         self._symptom_set: Set[str] = set()
@@ -45,6 +53,9 @@ class ConversationEngine:
         self.unanswered_prompts: Deque[str] = deque()
         self.no_progress_turns: int = 0
         self._stopped: bool = False
+        self._info_gain_history: List[float] = []
+        self._current_differential: Sequence[dict] = []
+        self.last_info_gain_gradient: Optional[float] = None
 
     # ------------------------------------------------------------------
     # Symptom tracking helpers
@@ -94,17 +105,50 @@ class ConversationEngine:
         previous_questions = [turn.question for turn in self.turns]
 
         while attempts < self.max_generation_attempts:
-            question = self.question_generator.generate_clarifying_question(
-                self.symptoms,
-                previous_answers=previous_answers,
-                previous_questions=previous_questions,
-                conversation_history=history,
+            if hasattr(self.question_generator, "generate_candidate_questions"):
+                candidates = self.question_generator.generate_candidate_questions(
+                    self.symptoms,
+                    previous_answers=previous_answers,
+                    previous_questions=previous_questions,
+                    conversation_history=history,
+                    num_candidates=self.candidate_pool_size,
+                )
+            else:
+                candidate = self.question_generator.generate_clarifying_question(
+                    self.symptoms,
+                    previous_answers=previous_answers,
+                    previous_questions=previous_questions,
+                    conversation_history=history,
+                )
+                candidates = [candidate] if candidate else []
+
+            selected_question, info_gain = self.question_strategy.select_question(
+                candidates,
+                self._current_differential,
+                history,
             )
             attempts += 1
 
-            if question:
-                normalized_question = question.strip()
+            if selected_question:
+                normalized_question = selected_question.strip()
                 if normalized_question and normalized_question not in asked_questions:
+                    info_gain_value = info_gain or 0.0
+                    if self._info_gain_history:
+                        previous_gain = self._info_gain_history[-1]
+                        gradient = previous_gain - info_gain_value
+                        self.last_info_gain_gradient = gradient
+                        if (
+                            previous_gain > 0
+                            and info_gain_value > 0
+                            and gradient >= 0
+                            and gradient <= self.information_gain_threshold
+                        ):
+                            self._stopped = True
+                            return None
+                    else:
+                        self.last_info_gain_gradient = None
+
+                    self._info_gain_history.append(info_gain_value)
                     turn = ConversationTurn(question=normalized_question)
                     self.turns.append(turn)
                     self.unanswered_prompts.append(normalized_question)
@@ -187,3 +231,20 @@ class ConversationEngine:
         self.unanswered_prompts.clear()
         self.no_progress_turns = 0
         self._stopped = False
+        self._info_gain_history.clear()
+        self._current_differential = []
+        self.last_info_gain_gradient = None
+
+    # ------------------------------------------------------------------
+    # Differential management
+    # ------------------------------------------------------------------
+    def update_differential(self, ranked_predictions: Sequence[dict]) -> None:
+        """Update the latest differential used for question selection."""
+
+        self._current_differential = list(ranked_predictions or [])
+
+    @property
+    def information_gain_history(self) -> List[float]:
+        """Return a copy of the historical information gain values."""
+
+        return list(self._info_gain_history)
