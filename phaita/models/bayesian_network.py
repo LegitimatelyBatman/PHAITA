@@ -1,9 +1,10 @@
-"""
-Bayesian symptom network for probabilistic symptom generation.
-"""
+"""Bayesian symptom network for probabilistic symptom generation."""
+
+from __future__ import annotations
 
 import random
-from typing import List, Dict, Tuple, Optional
+from typing import Dict, List, Optional
+
 from ..data.icd_conditions import RespiratoryConditions
 
 
@@ -11,11 +12,19 @@ class BayesianSymptomNetwork:
     """
     Bayesian network for modeling symptom relationships and generating realistic symptom sets.
     """
-    
-    def __init__(self):
+
+    def __init__(self, conditions: Optional[Dict[str, Dict]] = None):
         """Initialize the Bayesian symptom network."""
-        self.conditions = RespiratoryConditions.get_all_conditions()
-        
+        self.conditions: Dict[str, Dict] = {}
+        self.reload(conditions=conditions)
+
+    def reload(self, conditions: Optional[Dict[str, Dict]] = None) -> None:
+        """Refresh the network with the latest condition catalogue."""
+
+        if conditions is None:
+            conditions = RespiratoryConditions.get_all_conditions()
+        self.conditions = conditions
+
         # Probability parameters
         self.primary_symptom_prob = 0.8  # High probability for primary symptoms
         self.severity_symptom_prob = 0.4  # Lower for severity indicators

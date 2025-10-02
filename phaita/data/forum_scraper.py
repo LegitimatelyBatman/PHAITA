@@ -23,6 +23,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from .icd_conditions import RespiratoryConditions
+
 logger = logging.getLogger(__name__)
 
 try:  # Optional dependency, only required when the Reddit client is used.
@@ -58,9 +60,9 @@ class ForumPost:
 class LayLanguageMapper:
     """Maps between medical terminology and lay language."""
 
-    def __init__(self) -> None:
+    def __init__(self, conditions: Optional[Dict[str, Dict]] = None) -> None:
         """Initialize with predefined mappings."""
-        self.mappings = {
+        self._base_mappings = {
             "can't breathe": "dyspnea",
             "short of breath": "dyspnea",
             "breathless": "dyspnea",
@@ -88,12 +90,33 @@ class LayLanguageMapper:
             "burning up": "fever",
             "aching all over": "myalgia",
         }
-        self._build_reverse_mapping()
+        self.mappings: Dict[str, str] = {}
+        self.reload_from_conditions(conditions or RespiratoryConditions.get_all_conditions())
+        RespiratoryConditions.register_reload_hook(self.reload_from_conditions)
 
     def _build_reverse_mapping(self) -> None:
         self.reverse_mappings: Dict[str, List[str]] = {}
         for lay, medical in self.mappings.items():
             self.reverse_mappings.setdefault(medical, []).append(lay)
+
+    def reload_from_conditions(self, conditions: Dict[str, Dict]) -> None:
+        """Synchronise lay language mappings with the active condition set."""
+
+        combined = dict(self._base_mappings)
+        for condition in conditions.values():
+            canonical_condition = condition["name"].lower().replace(" ", "_")
+            combined.setdefault(condition["name"].lower(), canonical_condition)
+            combined.setdefault(canonical_condition.replace("_", " "), canonical_condition)
+
+            for symptom in condition.get("symptoms", []):
+                combined.setdefault(symptom.replace("_", " "), symptom)
+            for indicator in condition.get("severity_indicators", []):
+                combined.setdefault(indicator.replace("_", " "), indicator)
+            for lay_term in condition.get("lay_terms", []):
+                combined.setdefault(lay_term.lower(), canonical_condition)
+
+        self.mappings = combined
+        self._build_reverse_mapping()
 
     def get_medical_term(self, lay_term: str) -> Optional[str]:
         return self.mappings.get(lay_term.lower())
@@ -321,13 +344,15 @@ class ForumScraper:
         reddit_client: Optional[BaseForumClient] = None,
         patient_info_client: Optional[BaseForumClient] = None,
         mapper: Optional[LayLanguageMapper] = None,
+        conditions: Optional[Dict[str, Dict]] = None,
     ) -> None:
         self.cache_dir = Path(cache_dir) if cache_dir else Path("forum_data")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self._reddit_client = reddit_client
         self._patient_info_client = patient_info_client
-        self.mapper = mapper or LayLanguageMapper()
+        condition_catalogue = conditions or RespiratoryConditions.get_all_conditions()
+        self.mapper = mapper or LayLanguageMapper(condition_catalogue)
 
     def _normalise_posts(self, records: Iterable[Dict[str, Any]], source: str) -> List[ForumPost]:
         posts: List[ForumPost] = []
@@ -415,10 +440,21 @@ class ForumDataAugmentation:
         mapper: Optional[LayLanguageMapper] = None,
         forum_posts: Optional[Sequence[ForumPost]] = None,
         scraper: Optional[ForumScraper] = None,
+        conditions: Optional[Dict[str, Dict]] = None,
     ) -> None:
-        self.mapper = mapper or LayLanguageMapper()
+        self._conditions = conditions or RespiratoryConditions.get_all_conditions()
+        self.mapper = mapper or LayLanguageMapper(self._conditions)
         self.scraper = scraper
         self._forum_posts: List[ForumPost] = list(forum_posts or [])
+        self._vocabulary = RespiratoryConditions.get_vocabulary(self._conditions)
+        RespiratoryConditions.register_reload_hook(self.reload_conditions)
+
+    def reload_conditions(self, conditions: Optional[Dict[str, Dict]] = None) -> None:
+        """Reload configuration-derived vocabulary for long running services."""
+
+        self._conditions = conditions or RespiratoryConditions.get_all_conditions()
+        self.mapper.reload_from_conditions(self._conditions)
+        self._vocabulary = RespiratoryConditions.get_vocabulary(self._conditions)
 
     def update_forum_posts(self, posts: Sequence[ForumPost]) -> None:
         self._forum_posts = list(posts)
@@ -465,8 +501,11 @@ class ForumDataAugmentation:
             "Been {lay1} since yesterday, now {lay2} too",
             "Having {lay1}, plus {lay2}. Getting scared.",
         ]
-        symptoms = list(self.mapper.mappings.keys())
+        lay_vocabulary = self._vocabulary["lay_terms"] or list(self.mapper.mappings.keys())
+        symptoms = lay_vocabulary if lay_vocabulary else list(self.mapper.mappings.keys())
         complaints: List[str] = []
+        if not symptoms:
+            return complaints
         for idx in range(min(max_samples, len(symptoms))):
             lay1 = symptoms[idx % len(symptoms)]
             lay2 = symptoms[(idx + 7) % len(symptoms)]
@@ -478,11 +517,14 @@ class ForumDataAugmentation:
 # Convenience factory helpers -------------------------------------------------
 
 def create_forum_scraper(cache_dir: Optional[str] = None) -> ForumScraper:
-    return ForumScraper(cache_dir=cache_dir)
+    conditions = RespiratoryConditions.get_all_conditions()
+    return ForumScraper(cache_dir=cache_dir, conditions=conditions)
 
 
-def create_lay_language_mapper() -> LayLanguageMapper:
-    return LayLanguageMapper()
+def create_lay_language_mapper(
+    conditions: Optional[Dict[str, Dict]] = None,
+) -> LayLanguageMapper:
+    return LayLanguageMapper(conditions or RespiratoryConditions.get_all_conditions())
 
 
 def create_data_augmentation(
@@ -490,4 +532,11 @@ def create_data_augmentation(
     forum_posts: Optional[Sequence[ForumPost]] = None,
     scraper: Optional[ForumScraper] = None,
 ) -> ForumDataAugmentation:
-    return ForumDataAugmentation(mapper=mapper, forum_posts=forum_posts, scraper=scraper)
+    conditions = RespiratoryConditions.get_all_conditions()
+    mapper = mapper or LayLanguageMapper(conditions)
+    return ForumDataAugmentation(
+        mapper=mapper,
+        forum_posts=forum_posts,
+        scraper=scraper,
+        conditions=conditions,
+    )

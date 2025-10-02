@@ -79,6 +79,42 @@ python cli.py train --epochs 50 --batch-size 16
 python cli.py diagnose --complaint "I can't catch my breath"
 ```
 
+### Editing respiratory condition definitions
+
+Respiratory conditions, symptoms, severity indicators, and lay-language vocabularies
+now live in [`config/respiratory_conditions.yaml`](config/respiratory_conditions.yaml).
+Clinicians can edit this file (or point the `PHAITA_RESPIRATORY_CONFIG`
+environment variable at an alternative path) without touching the Python code.
+
+```yaml
+J45.9:
+  name: Asthma
+  symptoms:
+    - wheezing
+    - shortness_of_breath
+  severity_indicators:
+    - unable_to_speak
+  lay_terms:
+    - "can't breathe"
+    - tight chest
+  description: Chronic inflammatory airway disease with episodic symptoms
+```
+
+After editing the file, long-running services can hot-reload the catalogue:
+
+```python
+from phaita.data import RespiratoryConditions
+
+# Reload from disk (uses PHAITA_RESPIRATORY_CONFIG if set)
+RespiratoryConditions.reload()
+```
+
+`BayesianSymptomNetwork`, `SymptomGenerator`, and `ComplaintGenerator` subscribe to
+these reload events automatically, so freshly authored conditions become available
+immediately. Forum scraping and curriculum-learning utilities consume the same
+vocabulary via `RespiratoryConditions.get_vocabulary()`, ensuring the NLP complaint
+generator is trained on the exact symptom and lay-language set defined by physicians.
+
 ### Forum scraping
 Real forum data is now harvested on-demand via `scripts/scrape_forums.py`. The
 Reddit client uses OAuth credentials which must be supplied via environment
