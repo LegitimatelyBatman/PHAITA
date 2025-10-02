@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import numpy as np
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple, Optional, Union
 import random
 from tqdm import tqdm
 import logging
@@ -338,17 +338,33 @@ class AdversarialTrainer:
 
         return all_complaints, labels_tensor, mask_tensor
     
-    def generate_training_batch(self, batch_size: int) -> Tuple[List[str], List[str], torch.Tensor]:
+    def generate_training_batch(
+        self,
+        batch_size: int,
+        return_metadata: bool = False,
+    ) -> Union[
+        Tuple[List[str], List[str], torch.Tensor],
+        Tuple[List[str], List[str], torch.Tensor, List[str], List[Any]],
+    ]:
         """
         Generate a batch of synthetic training data.
-        
+
+        Args:
+            batch_size: Number of samples to draw.
+            return_metadata: When True, also return prompts and presentations used
+                for sampling, enabling reinforcement-style objectives.
+
         Returns:
             complaints: Generated patient complaints
             condition_codes: Corresponding condition codes
             labels: One-hot encoded labels for conditions
+            prompts (optional): Prompts passed to the generator
+            presentations (optional): Full presentation objects
         """
-        complaints = []
-        condition_codes = []
+        complaints: List[str] = []
+        condition_codes: List[str] = []
+        prompts: List[str] = []
+        presentations: List[Any] = []
         
         for _ in range(batch_size):
             # Sample random condition
@@ -356,10 +372,15 @@ class AdversarialTrainer:
             condition_codes.append(condition_code)
             
             presentation = self.symptom_generator.generate_symptoms(condition_code)
+            if return_metadata:
+                prompt = self.complaint_generator.create_guidance_prompt(presentation)
             presentation = self.complaint_generator.generate_complaint(
                 presentation=presentation
             )
             complaints.append(presentation.complaint_text)
+            if return_metadata:
+                prompts.append(prompt)
+                presentations.append(presentation)
         
         # Create labels
         labels = []
@@ -369,6 +390,9 @@ class AdversarialTrainer:
         
         labels = torch.tensor(labels, dtype=torch.long, device=self.device)
         
+        if return_metadata:
+            return complaints, condition_codes, labels, prompts, presentations
+
         return complaints, condition_codes, labels
     
     def train_discriminator_step(
@@ -460,43 +484,59 @@ class AdversarialTrainer:
             Dictionary of loss values
         """
         self.generator.train()
-        self.gen_optimizer.zero_grad()
-        
-        # Generate fake complaints
-        fake_complaints, _, _ = self.generate_training_batch(batch_size)
-        
-        # Get discriminator outputs with features
-        # Note: Since generator doesn't have differentiable generation yet,
-        # we optimize based on the discriminator's assessment
+        self.gen_optimizer.zero_grad(set_to_none=True)
+
+        (
+            fake_complaints,
+            _,
+            _,
+            prompts,
+            _,
+        ) = self.generate_training_batch(batch_size, return_metadata=True)
+
         fake_outputs = self.discriminator(fake_complaints, return_features=True)
-        
-        # Generator wants fake samples to be classified as real (label = 1)
-        real_labels_adv = torch.ones(len(fake_complaints), 1, device=self.device)
-        gen_adv_loss = self.adversarial_loss(fake_outputs["discriminator_scores"], real_labels_adv)
-        
-        # Diversity loss using real DeBERTa embeddings
-        diversity_loss = self.diversity_loss(fake_outputs["text_features"], fake_complaints)
-        
-        # Realism loss to encourage authentic-sounding complaints
-        realism_loss = self.realism_loss(fake_complaints)
-        
-        # Total generator loss
-        gen_loss = (gen_adv_loss + 
-                   self.diversity_weight * diversity_loss + 
-                   self.realism_weight * realism_loss)
-        
-        gen_loss.backward()
-        
-        # Gradient clipping
+
+        adv_scores = torch.sigmoid(fake_outputs["discriminator_scores"]).squeeze(-1).detach()
+        diversity_penalty = self.diversity_loss(fake_outputs["text_features"], fake_complaints)
+        diversity_penalty_value = diversity_penalty.detach()
+
+        realism_scores = self.realism_scorer.compute_realism_score(fake_complaints).to(self.device).detach()
+
+        log_prob_info = self.generator.compute_guided_log_probs(prompts, fake_complaints)
+        sequence_log_probs = log_prob_info["sequence_log_probs"]
+        token_mask = log_prob_info.get("token_mask")
+        if token_mask is not None:
+            lengths = token_mask.sum(dim=1).clamp(min=1).to(sequence_log_probs.dtype)
+        else:
+            lengths = torch.ones_like(sequence_log_probs)
+        normalized_log_probs = sequence_log_probs / lengths
+
+        if isinstance(diversity_penalty_value, torch.Tensor):
+            diversity_penalty_value = diversity_penalty_value.to(self.device)
+            diversity_adjustment = diversity_penalty_value.mean()
+        else:
+            diversity_adjustment = torch.tensor(diversity_penalty_value, device=self.device)
+
+        rewards = adv_scores + self.realism_weight * realism_scores - self.diversity_weight * diversity_adjustment
+        baseline = rewards.mean()
+        advantages = rewards - baseline
+
+        policy_loss = -(advantages.detach() * normalized_log_probs).mean()
+        policy_loss.backward()
+
         torch.nn.utils.clip_grad_norm_(self.generator.parameters(), self.max_grad_norm)
-        
         self.gen_optimizer.step()
-        
+
         return {
-            "gen_loss": gen_loss.item(),
-            "gen_adv_loss": gen_adv_loss.item(),
-            "diversity_loss": diversity_loss.item(),
-            "realism_loss": realism_loss.item()
+            "gen_loss": policy_loss.item(),
+            "policy_loss": policy_loss.item(),
+            "avg_reward": rewards.mean().item(),
+            "baseline": baseline.item(),
+            "adv_reward": adv_scores.mean().item(),
+            "realism_score": realism_scores.mean().item(),
+            "diversity_loss": diversity_penalty.item(),
+            "gen_adv_loss": (1.0 - adv_scores).mean().item(),
+            "realism_loss": (1.0 - realism_scores).mean().item() * self.realism_weight,
         }
     
     def evaluate(self, eval_complaints: List[str], eval_labels: List[str]) -> Dict[str, float]:

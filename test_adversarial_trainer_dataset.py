@@ -1,7 +1,7 @@
 import importlib
 import sys
 import types
-from typing import Dict, List
+from typing import Dict, List, Optional
 from unittest import mock
 
 import torch
@@ -41,8 +41,29 @@ class DummyComplaintGenerator(nn.Module):
         self._counter += 1
         return presentation
 
+    def create_guidance_prompt(self, presentation: DummyPresentation) -> str:  # type: ignore[override]
+        return f"prompt for {presentation.condition_code}"
+
+    def compute_guided_log_probs(self, prompts, target_texts, max_length=512):  # type: ignore[override]
+        if len(prompts) != len(target_texts):
+            raise ValueError("prompts and target_texts length mismatch")
+        batch = len(target_texts)
+        device = self.dummy_param.device
+        log_prob = self.dummy_param.expand(batch).clone()
+        token_log_probs = log_prob.unsqueeze(1)
+        mask = torch.ones(batch, 1, dtype=torch.bool, device=device)
+        return {
+            "token_log_probs": token_log_probs,
+            "sequence_log_probs": log_prob,
+            "token_mask": mask,
+            "prompt_lengths": torch.ones(batch, dtype=torch.long, device=device),
+        }
+
 
 class DummyRealismScorer:
+    def __init__(self, device: Optional[str] = None, **kwargs):
+        self.device = torch.device(device or "cpu")
+
     def get_detailed_scores(self, complaint: str) -> Dict[str, float]:
         return {
             "fluency": 0.0,
@@ -50,6 +71,12 @@ class DummyRealismScorer:
             "medical_relevance": 0.0,
             "overall": 0.0,
         }
+
+    def compute_realism_score(self, complaints):
+        if not complaints:
+            return torch.zeros(0, device=self.device)
+        scores = torch.linspace(0.2, 0.8, steps=len(complaints), device=self.device)
+        return scores
 
 
 class DummyRealismLoss:
@@ -75,14 +102,17 @@ class DummyDiscriminator(nn.Module):
     def forward(self, complaints, return_features: bool = False):  # type: ignore[override]
         batch_size = len(complaints)
         device = self.dummy_param.device
-        diagnosis_logits = torch.zeros(batch_size, self.num_conditions, device=device, requires_grad=True)
-        discriminator_scores = torch.zeros(batch_size, 1, device=device, requires_grad=True)
+        diagnosis_logits = torch.zeros(batch_size, self.num_conditions, device=device)
+        base = torch.arange(batch_size, dtype=torch.float32, device=device)
+        discriminator_scores = (base.unsqueeze(1) * 0.2) - 0.1
         outputs = {
             "diagnosis_logits": diagnosis_logits,
             "discriminator_scores": discriminator_scores,
         }
         if return_features:
-            outputs["text_features"] = torch.zeros(batch_size, self.feature_dim, device=device, requires_grad=True)
+            feature_row = torch.arange(self.feature_dim, dtype=torch.float32, device=device)
+            features = torch.stack([feature_row + idx for idx in range(batch_size)], dim=0)
+            outputs["text_features"] = features
         return outputs
 
     def predict_diagnosis(self, complaints, top_k: int = 1):  # type: ignore[override]
@@ -126,7 +156,7 @@ class ModulePatcher:
         self.stubbed.append("phaita.models.discriminator")
 
         realism_module = types.ModuleType("phaita.utils.realism_scorer")
-        realism_module.create_realism_scorer = lambda *args, **kwargs: DummyRealismScorer()
+        realism_module.create_realism_scorer = lambda *args, **kwargs: DummyRealismScorer(**kwargs)
         realism_module.RealismLoss = DummyRealismLoss
         sys.modules["phaita.utils.realism_scorer"] = realism_module
         self.stubbed.append("phaita.utils.realism_scorer")
@@ -200,7 +230,7 @@ def test_discriminator_uses_physician_verified_corpus():
 
         synthetic_counter = {"value": 0}
 
-        def fake_generate_training_batch(batch_size):
+        def fake_generate_training_batch(batch_size, return_metadata=False):
             complaints = []
             codes = []
             labels = []
@@ -214,6 +244,12 @@ def test_discriminator_uses_physician_verified_corpus():
                 labels.append(label_idx)
                 synthetic_counter["value"] += 1
             label_tensor = torch.tensor(labels, dtype=torch.long, device=trainer.device)
+            if return_metadata:
+                prompts = [f"prompt_{i}" for i in range(len(complaints))]
+                presentations = [DummyPresentation(code) for code in codes]
+                for pres, text in zip(presentations, complaints):
+                    pres.complaint_text = text
+                return complaints, codes, label_tensor, prompts, presentations
             return complaints, codes, label_tensor
 
         trainer.train_discriminator_step = fake_train_discriminator  # type: ignore[assignment]
@@ -257,12 +293,18 @@ def test_forum_samples_are_marked_unlabeled():
             "forum complaint c",
         ]
 
-        def deterministic_batch(batch_size):
+        def deterministic_batch(batch_size, return_metadata=False):
             complaints = [f"synthetic_{idx}" for idx in range(batch_size)]
             codes = [trainer.condition_codes[idx % len(trainer.condition_codes)] for idx in range(batch_size)]
             labels = torch.tensor([
                 trainer.condition_codes.index(code) for code in codes
             ], dtype=torch.long, device=trainer.device)
+            if return_metadata:
+                prompts = [f"prompt_{code}" for code in codes]
+                presentations = [DummyPresentation(code) for code in codes]
+                for pres, text in zip(presentations, complaints):
+                    pres.complaint_text = text
+                return complaints, codes, labels, prompts, presentations
             return complaints, codes, labels
 
         trainer.generate_training_batch = deterministic_batch  # type: ignore[assignment]
@@ -279,3 +321,25 @@ def test_forum_samples_are_marked_unlabeled():
             complaint for complaint, is_labeled in zip(complaints, mask.tolist()) if not is_labeled
         ]
         assert set(forum_complaints_in_batch).issubset(set(trainer.forum_complaints))
+
+
+def test_train_generator_step_updates_generator_parameters():
+    with ModulePatcher():
+        trainer_module = importlib.import_module("phaita.training.adversarial_trainer")
+        importlib.reload(trainer_module)
+
+        trainer = trainer_module.AdversarialTrainer(
+            use_curriculum_learning=False,
+            use_forum_data=False,
+            realism_weight=0.0,
+        )
+
+        initial_param = trainer.generator.dummy_param.detach().clone()
+
+        losses = trainer.train_generator_step(batch_size=3)
+
+        updated_param = trainer.generator.dummy_param.detach()
+
+        assert "policy_loss" in losses
+        assert not torch.allclose(initial_param, updated_param)
+        assert torch.isfinite(torch.tensor(list(losses.values()))).all()

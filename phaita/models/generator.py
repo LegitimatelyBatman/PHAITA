@@ -6,6 +6,8 @@ Requires transformers and bitsandbytes to be properly installed.
 import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
 from typing import List, Optional, Dict, Iterable
 from .bayesian_network import BayesianSymptomNetwork
 from ..data.icd_conditions import RespiratoryConditions
@@ -370,6 +372,132 @@ Patient complaint: [/INST]"""
         presentation.complaint_text = complaint_text
         self.current_presentation = presentation
         return presentation
+
+    def create_guidance_prompt(self, presentation: PatientPresentation) -> str:
+        """Public helper to build the LLM prompt for a presentation."""
+
+        return self._create_prompt(presentation)
+
+    def compute_guided_log_probs(
+        self,
+        prompts: List[str],
+        target_texts: List[str],
+        max_length: int = 512,
+    ) -> Dict[str, torch.Tensor]:
+        """Compute log-probabilities for target sequences under provided prompts.
+
+        Args:
+            prompts: Prompt strings used to condition generation.
+            target_texts: Text that should be scored token-by-token.
+            max_length: Maximum combined sequence length for tokenization.
+
+        Returns:
+            Dictionary with token-level log-probabilities, sequence log-probabilities,
+            the boolean mask for valid target tokens, and prompt token lengths.
+        """
+
+        if self.model is None or self.tokenizer is None:
+            raise RuntimeError(
+                "Model not loaded. Ensure ComplaintGenerator was initialized with use_pretrained=True "
+                "and model loaded successfully."
+            )
+
+        if len(prompts) != len(target_texts):
+            raise ValueError("prompts and target_texts must have the same length")
+
+        device = self.model.device
+
+        # Tokenize prompts and targets separately to obtain precise lengths
+        prompt_encoding = self.tokenizer(
+            prompts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            add_special_tokens=False,
+        )
+        target_encoding = self.tokenizer(
+            target_texts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            add_special_tokens=False,
+        )
+
+        input_sequences: List[torch.Tensor] = []
+        attention_sequences: List[torch.Tensor] = []
+        label_sequences: List[torch.Tensor] = []
+        target_masks: List[torch.Tensor] = []
+        prompt_lengths: List[int] = []
+
+        pad_token_id = self.tokenizer.pad_token_id or self.tokenizer.eos_token_id
+
+        for idx in range(len(prompts)):
+            prompt_ids = prompt_encoding["input_ids"][idx]
+            prompt_mask = prompt_encoding["attention_mask"][idx]
+            prompt_len = int(prompt_mask.sum().item())
+            prompt_ids = prompt_ids[:prompt_len]
+
+            target_ids = target_encoding["input_ids"][idx]
+            target_mask = target_encoding["attention_mask"][idx]
+            target_len = int(target_mask.sum().item())
+            target_ids = target_ids[:target_len]
+
+            combined = torch.cat([prompt_ids, target_ids], dim=0)
+            attention = torch.ones_like(combined)
+            labels = torch.full_like(combined, fill_value=-100)
+            if target_len > 0:
+                labels[-target_len:] = target_ids
+
+            token_mask = labels != -100
+
+            input_sequences.append(combined)
+            attention_sequences.append(attention)
+            label_sequences.append(labels)
+            target_masks.append(token_mask)
+            prompt_lengths.append(prompt_len)
+
+        padded_inputs = pad_sequence(
+            [seq.to(device) for seq in input_sequences],
+            batch_first=True,
+            padding_value=pad_token_id,
+        )
+        padded_attention = pad_sequence(
+            [seq.to(device) for seq in attention_sequences],
+            batch_first=True,
+            padding_value=0,
+        )
+        padded_labels = pad_sequence(
+            [seq.to(device) for seq in label_sequences],
+            batch_first=True,
+            padding_value=-100,
+        )
+        padded_mask = pad_sequence(
+            [seq.to(device) for seq in target_masks],
+            batch_first=True,
+            padding_value=0,
+        ).bool()
+
+        outputs = self.model(
+            input_ids=padded_inputs,
+            attention_mask=padded_attention,
+        )
+        logits = outputs.logits
+        log_probs = F.log_softmax(logits, dim=-1)
+
+        safe_labels = padded_labels.clone()
+        safe_labels[~padded_mask] = 0
+        gathered = torch.gather(log_probs, 2, safe_labels.unsqueeze(-1)).squeeze(-1)
+        token_log_probs = torch.where(padded_mask, gathered, torch.zeros_like(gathered))
+        sequence_log_probs = token_log_probs.sum(dim=1)
+
+        return {
+            "token_log_probs": token_log_probs,
+            "sequence_log_probs": sequence_log_probs,
+            "token_mask": padded_mask,
+            "prompt_lengths": torch.tensor(prompt_lengths, device=device, dtype=torch.long),
+        }
 
     def generate_multiple_complaints(
         self,
