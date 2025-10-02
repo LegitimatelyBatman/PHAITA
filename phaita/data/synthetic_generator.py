@@ -54,15 +54,25 @@ class SyntheticDataGenerator:
         variations = []
         
         for i in range(num_variations):
-            symptoms = self.symptom_gen.generate_symptoms(condition_code)
-            complaint = self.complaint_gen.generate_complaint(symptoms, condition_code)
-            
+            presentation = self.symptom_gen.generate_symptoms(condition_code)
+            presentation = self.complaint_gen.generate_complaint(
+                presentation=presentation
+            )
+
             variation = {
                 "id": f"{condition_code}_{i}",
                 "condition_code": condition_code,
                 "condition_name": self.conditions[condition_code]["name"],
-                "symptoms": symptoms,
-                "complaint": complaint
+                "symptoms": presentation.symptoms,
+                "complaint": presentation.complaint_text,
+                "symptom_probabilities": presentation.symptom_probabilities,
+                "misdescription_weights": presentation.misdescription_weights,
+                "vocabulary_profile": {
+                    "allowed_terms": presentation.vocabulary_profile.allowed_terms,
+                    "term_overrides": presentation.vocabulary_profile.term_overrides,
+                    "register": presentation.vocabulary_profile.register,
+                    "max_terms_per_response": presentation.vocabulary_profile.max_terms_per_response,
+                },
             }
             variations.append(variation)
         
