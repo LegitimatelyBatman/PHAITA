@@ -3,7 +3,7 @@ Interactive question generator for medical triage.
 Uses Mistral-7B for dynamic question generation with template fallback.
 """
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Set
 import random
 import torch
 import torch.nn as nn
@@ -53,6 +53,7 @@ class QuestionGenerator(nn.Module):
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.default_candidate_pool_size = 3
         
         # Try to load LLM
         if self.use_llm:
@@ -283,6 +284,71 @@ Question: [/INST]"""
 
         return default_question
     
+    def generate_candidate_questions(
+        self,
+        symptoms: List[str],
+        previous_answers: Optional[List[str]] = None,
+        previous_questions: Optional[List[str]] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        *,
+        num_candidates: Optional[int] = None,
+    ) -> List[str]:
+        """Return a ranked pool of candidate clarifying questions.
+
+        Args:
+            symptoms: List of observed symptoms.
+            previous_answers: Previously provided answers.
+            previous_questions: Questions that have already been asked.
+            conversation_history: Structured history of prior exchanges.
+            num_candidates: Optional cap on the number of questions to return.
+
+        Returns:
+            A list of unique question strings ordered by generation preference.
+        """
+
+        requested = num_candidates or self.default_candidate_pool_size
+        seen: Set[str] = set()
+        candidates: List[str] = []
+
+        def _try_add(question: Optional[str]) -> None:
+            if not question:
+                return
+            normalized = question.strip()
+            if not normalized:
+                return
+            lower = normalized.lower()
+            if lower in seen:
+                return
+            seen.add(lower)
+            candidates.append(normalized)
+
+        asked = set((previous_questions or []))
+
+        generator = (
+            self._generate_with_llm
+            if self.use_llm
+            else self._generate_with_template
+        )
+
+        attempts = 0
+        max_attempts = max(requested * 2, requested + 1)
+        while len(candidates) < requested and attempts < max_attempts:
+            question = generator(
+                symptoms,
+                previous_answers=previous_answers,
+                previous_questions=list(asked),
+                conversation_history=conversation_history,
+            )
+            attempts += 1
+            _try_add(question)
+
+        if not candidates:
+            fallback = "Can you tell me more about your symptoms?"
+            if fallback not in asked:
+                candidates.append(fallback)
+
+        return candidates
+
     def generate_clarifying_question(
         self,
         symptoms: List[str],
@@ -293,30 +359,19 @@ Question: [/INST]"""
         """
         Generate a clarifying question based on symptoms.
         Uses LLM if available, otherwise templates.
-        
-        Args:
-            symptoms: List of symptoms
-            previous_answers: Previously provided answers
-            previous_questions: Questions asked earlier in the exchange
-            conversation_history: Structured history of question/answer pairs
-            
-        Returns:
-            Clarifying question string
+
+        This helper maintains backwards compatibility with earlier code paths
+        by selecting the first candidate from the broader question pool.
         """
-        if self.use_llm:
-            return self._generate_with_llm(
-                symptoms,
-                previous_answers=previous_answers,
-                previous_questions=previous_questions,
-                conversation_history=conversation_history,
-            )
-        else:
-            return self._generate_with_template(
-                symptoms,
-                previous_answers=previous_answers,
-                previous_questions=previous_questions,
-                conversation_history=conversation_history,
-            )
+
+        candidates = self.generate_candidate_questions(
+            symptoms,
+            previous_answers=previous_answers,
+            previous_questions=previous_questions,
+            conversation_history=conversation_history,
+        )
+
+        return candidates[0] if candidates else ""
     
     def generate_followup_questions(
         self,
