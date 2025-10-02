@@ -47,7 +47,12 @@ The following models are automatically downloaded from HuggingFace Hub:
 |-------|------------|---------|
 | Complaint generation | Bayesian symptom sampler → Mistral-7B-Instruct (4-bit quantized) | Produce varied patient narratives for a target condition. |
 | Diagnosis | DeBERTa-v3-base encoder + Graph Attention Network (torch-geometric) | Predict condition and assess complaint realism. |
-| Training loop | AdversarialTrainer with curriculum and diversity losses | Alternate generator/discriminator optimization on synthetic + forum-style text. |
+| Training loop | AdversarialTrainer with curriculum, diversity, and unsupervised forum regularisation | Alternate generator/discriminator optimization on synthetic + forum-style text with masked unlabeled samples. |
+
+Curriculum batches now expose a boolean mask so unlabeled forum complaints skip
+cross-entropy updates. Instead, the discriminator minimises the entropy of its
+predictions on those samples, encouraging confident assignments without
+hallucinating random labels.
 
 ## Key Capabilities
 - **Synthetic-first pipeline**: Generates complaints, question prompts, and labeled datasets without patient data.
