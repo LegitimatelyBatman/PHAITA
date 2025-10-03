@@ -284,11 +284,11 @@ Potential additions for future test coverage:
 
 ## Related Documentation
 
-- [DIALOGUE_ENGINE.md](../DIALOGUE_ENGINE.md) - DialogueEngine architecture
-- [DIAGNOSIS_ORCHESTRATOR_README.md](../DIAGNOSIS_ORCHESTRATOR_README.md) - Red-flag system
-- [IMPLEMENTATION_SUMMARY.md](../IMPLEMENTATION_SUMMARY.md) - Module overview
-- [test_dialogue_engine.py](../test_dialogue_engine.py) - Unit tests
-- [test_diagnosis_orchestrator.py](../test_diagnosis_orchestrator.py) - Unit tests
+- [architecture/DIALOGUE_ENGINE.md](architecture/DIALOGUE_ENGINE.md) - DialogueEngine architecture
+- [architecture/DIAGNOSIS_ORCHESTRATOR_README.md](architecture/DIAGNOSIS_ORCHESTRATOR_README.md) - Red-flag system
+- [../IMPLEMENTATION_SUMMARY.md](../IMPLEMENTATION_SUMMARY.md) - Module overview
+- [../test_dialogue_engine.py](../test_dialogue_engine.py) - Unit tests
+- [../test_diagnosis_orchestrator.py](../test_diagnosis_orchestrator.py) - Unit tests
 
 ## Contributing
 

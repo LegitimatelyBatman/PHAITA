@@ -13,10 +13,34 @@ pip install -e .  # optional editable install
 
 **Tests (all are plain Python scripts, NO pytest needed):**
 ```bash
+# Core tests (always run these first)
 python test_basic.py              # FAST ~10s - data, Bayesian, config, synthetic
-python test_enhanced_bayesian.py  # FAST ~10s - age/severity/rare presentations
+python test_enhanced_bayesian.py  # FAST ~10s - age/severity/rare/comorbidity
 python test_forum_scraping.py     # FAST ~10s - forum data, lay language
-python test_integration.py        # SLOW ~2min - requires network, retries HuggingFace downloads
+
+# Dialogue and conversation tests
+python test_dialogue_engine.py            # FAST ~5s - belief updating, info gain
+python test_diagnosis_orchestrator.py     # FAST ~3s - ensemble, red-flags, escalation
+python test_conversation_flow.py          # FAST ~5s - end-to-end triage sessions
+python test_escalation_guidance.py        # FAST ~3s - care routing validation
+
+# Model and architecture tests
+python test_causal_graph.py               # FAST ~5s - GNN causal edges
+python test_template_diversity.py         # FAST ~5s - template generation
+python test_temporal_modeling.py          # FAST ~10s - temporal symptom progression
+python test_uncertainty.py                # FAST ~5s - uncertainty quantification
+python test_gnn_performance.py            # FAST ~10s - GNN benchmarks
+
+# CLI and workflow tests
+python test_conversation_engine.py        # FAST ~5s - conversation engine logic
+python test_cli_challenge_command.py      # FAST ~2s - challenge CLI
+python test_cli_triage_workflow.py        # FAST ~5s - diagnose CLI workflow
+
+# Integration tests
+python test_integration.py                # SLOW ~2min - requires network, downloads models
+
+# Note: Additional test files exist for specific features (model loader, patient CLI, etc.)
+# See docs/TESTING.md for complete documentation of all 22 test files
 ```
 ⚠️ Integration test attempts model downloads, retries ~60s, then falls back gracefully (expected).
 
@@ -53,8 +77,8 @@ phaita/                         # Core package
     metrics.py                  # Accuracy, diversity
     realism_scorer.py           # Transformer realism scoring
 cli.py                          # Main interface (train/demo/generate/diagnose/challenge)
-test_*.py                       # Test suites (4 files)
-demo_*.py                       # Demos (3 files)
+test_*.py                       # Test suites (22 files - see docs/TESTING.md)
+demo_*.py                       # Demos (8 files)
 config.yaml                     # Model names, hyperparams, architecture
 requirements.txt                # Dependencies (torch>=2.0, transformers>=4.35, etc.)
 ```
@@ -67,9 +91,19 @@ requirements.txt                # Dependencies (torch>=2.0, transformers>=4.35, 
 
 **Test after changes:**
 ```bash
-python test_basic.py              # Always run first
+# Always run core tests first
+python test_basic.py              # Core functionality
 python test_enhanced_bayesian.py  # If Bayesian logic changed
 python test_forum_scraping.py     # If data layer changed
+
+# Run feature-specific tests based on changes
+python test_dialogue_engine.py            # If dialogue system changed
+python test_diagnosis_orchestrator.py     # If diagnosis/red-flags changed
+python test_conversation_flow.py          # If conversation flow changed
+python test_causal_graph.py               # If GNN/graph changed
+python test_template_diversity.py         # If template system changed
+
+# See docs/TESTING.md for complete test guide
 # Skip test_integration.py unless testing full stack
 ```
 
@@ -89,7 +123,7 @@ python test_forum_scraping.py     # If data layer changed
 
 **Automatic fallback:** Missing torch_geometric → MLP encoder; missing models → templates; missing transformers → simple text. **DON'T fix "failed to download" errors - expected offline.**
 
-**Test expectations:** test_basic.py (4/4), test_enhanced_bayesian.py (all), test_forum_scraping.py (3/3), test_integration.py (may timeout Task 1).
+**Test expectations:** test_basic.py (4/4), test_enhanced_bayesian.py (6/6), test_forum_scraping.py (3/3), test_dialogue_engine.py (all pass), test_diagnosis_orchestrator.py (11/11), test_conversation_flow.py (5/5), test_escalation_guidance.py (6/6). See docs/TESTING.md for all 22 test files.
 
 **Python 3.10+** required. Check: `python --version`
 
@@ -98,6 +132,9 @@ python test_forum_scraping.py     # If data layer changed
 **CPU/GPU:** Everything works CPU-only with templates. GPU optional for full stack. Auto-detects device.
 
 ## Documentation
+- `docs/DOCUMENTATION_INDEX.md` - Complete navigation guide to all documentation
+- `docs/TESTING.md` - Comprehensive testing guide (all 22 test files)
+- `docs/TESTING_MULTI_TURN_DIALOGUES.md` - Dialogue integration tests
 - `README.md` - Quick start, CLI, API
 - `PROJECT_SUMMARY.md` - Problem, solution, vision
 - `IMPLEMENTATION_SUMMARY.md` - Module guide

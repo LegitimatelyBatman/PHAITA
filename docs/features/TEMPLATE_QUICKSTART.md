@@ -9,7 +9,7 @@ The PHAITA complaint generation system has been expanded from basic templates to
 1. **`phaita/data/templates.yaml`** - 28 complaint templates with metadata
 2. **`phaita/data/template_loader.py`** - Template manager with intelligent selection
 3. **`test_template_diversity.py`** - Comprehensive test suite (6 tests)
-4. **`TEMPLATE_IMPLEMENTATION.md`** - Detailed documentation
+4. **`TEMPLATE_IMPLEMENTATION.md`** - Detailed documentation (see docs/features/)
 
 ## Quick Usage
 
@@ -132,7 +132,7 @@ Templates automatically load on next run.
 
 ## Next Steps
 
-1. Review `TEMPLATE_IMPLEMENTATION.md` for detailed architecture
+1. Review `TEMPLATE_IMPLEMENTATION.md` (in docs/features/) for detailed architecture
 2. Run `python test_template_diversity.py` to verify installation
 3. Try generating complaints: `python cli.py generate --count 10`
 4. Explore templates in `phaita/data/templates.yaml`
@@ -142,4 +142,4 @@ Templates automatically load on next run.
 For issues or questions:
 1. Check test output: `python test_template_diversity.py`
 2. Review logs in test output
-3. Consult `TEMPLATE_IMPLEMENTATION.md` for details
+3. Consult `TEMPLATE_IMPLEMENTATION.md` (in docs/features/) for details

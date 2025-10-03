@@ -180,36 +180,37 @@ test_*.py              Unit and integration tests
 
 ## Testing
 
-PHAITA includes comprehensive test suites (no pytest required - plain Python):
+PHAITA includes **22 comprehensive test suites** (no pytest required - plain Python):
 
 ```bash
-# Basic tests - data, Bayesian, config, synthetic generation (~10s)
-python test_basic.py
+# Quick validation - core tests (~30 seconds)
+python test_basic.py                      # Core data, config, Bayesian
+python test_enhanced_bayesian.py          # Age/severity/rare presentations
+python test_forum_scraping.py             # Forum data augmentation
+python test_dialogue_engine.py            # Belief updating, information gain
+python test_diagnosis_orchestrator.py     # Ensemble, red-flags, escalation
 
-# Dialogue engine tests - belief updating, information gain (~5s)
-python test_dialogue_engine.py
-
-# Diagnosis orchestrator tests - ensemble, red-flags, escalation (~3s)
-python test_diagnosis_orchestrator.py
-
-# NEW: Multi-turn dialogue integration tests (~5s)
-python test_conversation_flow.py
-
-# NEW: Escalation guidance tests (~3s)
-python test_escalation_guidance.py
+# Integration tests - end-to-end workflows (~10 seconds)
+python test_conversation_flow.py          # Complete triage sessions
+python test_escalation_guidance.py        # Care routing validation
 ```
 
-The new integration tests validate:
-- **Complete triage sessions** (symptom → questions → diagnosis)
-- **Edge cases** (deny all symptoms, conflicting symptoms)
-- **Termination logic** (confidence threshold, turn limits)
-- **Red-flag detection** (emergency symptoms, condition-specific)
-- **Care routing** (emergency/urgent/routine escalation)
-- **Guidance text** (actionable recommendations)
+**Test coverage includes:**
+- ✅ Core data layer and configuration
+- ✅ Bayesian networks (basic + enhanced features)
+- ✅ Multi-turn dialogue systems
+- ✅ Diagnosis orchestration with red-flags
+- ✅ Graph neural networks with causal edges
+- ✅ Template generation systems
+- ✅ Temporal symptom modeling
+- ✅ Uncertainty quantification
+- ✅ CLI interfaces and workflows
 
-See [docs/TESTING_MULTI_TURN_DIALOGUES.md](docs/TESTING_MULTI_TURN_DIALOGUES.md) for detailed test documentation.
+See **[docs/TESTING.md](docs/TESTING.md)** for the complete testing guide with all 22 test files documented.
 
 ## Documentation Map
+- **[docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md)** – Complete navigation guide to all documentation.
+- **[docs/TESTING.md](docs/TESTING.md)** – Comprehensive testing guide with all 22 test files documented.
 - **PROJECT_SUMMARY.md** – Problem statement, solution outline, and roadmap.
 - **IMPLEMENTATION_SUMMARY.md** – High-level tour of major modules.
 - **IMPLEMENTATION_DETAILS.md** – Deep-learning upgrade highlights and references.
