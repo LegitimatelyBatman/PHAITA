@@ -7,40 +7,37 @@ PHAITA is a research prototype for medical triage that pits a language-model com
 ## Overview
 - **Scope**: Ten respiratory conditions (ICD-10) with lay-language support.
 - **Goal**: Stress-test diagnostic models with challenging, human-like complaints.
-- **Status**: Production-ready deep-learning pipeline requiring GPU acceleration and transformer models.
+- **Status**: Research prototype with an optional deep-learning stack; template-based fallbacks keep demos and tests CPU-friendly.
 
 ## System Requirements
 
 ### Hardware Requirements
-PHAITA requires significant computational resources for the full deep-learning stack:
 
-- **GPU**: CUDA-capable GPU with **4GB+ VRAM** (8GB+ recommended for training)
-  - Required for 4-bit quantization with bitsandbytes
-  - CPU-only mode available but significantly slower (pass `use_4bit=False`)
-- **RAM**: 16GB+ system memory recommended
-- **Storage**: ~10GB for model weights (downloaded from HuggingFace Hub on first run)
-- **Network**: Internet connection required for initial model downloads
+| Scenario | Hardware Notes |
+|----------|----------------|
+| **Template / smoke tests** | Runs entirely on CPU. A modern laptop (8 GB RAM) is sufficient for demos, unit tests, and deterministic complaint templates. |
+| **Full deep-learning stack** | CUDA-capable GPU with **≥4 GB VRAM** (8 GB+ recommended for training) to host quantised Mistral 7B and DeBERTa. Expect ~10 GB of storage for model weights and an internet connection on first run. |
 
 ### Software Dependencies
-Exact versions are required for compatibility:
 
 - **Python**: 3.10+ (3.12 recommended)
-- **PyTorch**: 2.5.1 (with CUDA 11.8+ for GPU support)
+- **PyTorch**: 2.5.1 (with CUDA 11.8+ for GPU acceleration)
 - **Transformers**: 4.46.0 (HuggingFace)
-- **bitsandbytes**: 0.44.1 (for 4-bit model quantization, CUDA required)
-- **torch-geometric**: 2.6.1 (for Graph Neural Networks)
+- **bitsandbytes**: 0.44.1 (only needed when enabling 4-bit quantisation)
+- **torch-geometric**: 2.6.1 (required for the graph-enhanced discriminator)
 
-See `requirements.txt` for complete dependency list.
+The full list lives in `requirements.txt`. Lightweight usage paths import only the Bayesian simulators and configuration helpers, so most tests run even when the transformer/GNN extras are missing.
 
 ### Models Used
-The following models are automatically downloaded from HuggingFace Hub:
 
-- **Mistral-7B-Instruct-v0.2** (~7GB): Complaint and question generation
-- **microsoft/deberta-v3-base** (~440MB): Text encoding for diagnosis
-- **Bio_ClinicalBERT** or **bert-base-uncased** (~420MB): Realism scoring
-- **GPT-2** (~500MB): Perplexity evaluation
+The following pretrained models are downloaded on demand when the deep-learning mode is enabled:
 
-**Note**: All models are now **required**. Template-based fallbacks have been removed to ensure consistent behavior and quality.
+- **Mistral-7B-Instruct-v0.2** (~7 GB): Complaint and question generation
+- **microsoft/deberta-v3-base** (~440 MB): Text encoding for diagnosis
+- **Bio_ClinicalBERT** or **bert-base-uncased** (~420 MB): Realism scoring
+- **GPT-2** (~500 MB): Perplexity evaluation
+
+**Note**: Template fallbacks remain available. Pass `use_pretrained=False` to `ComplaintGenerator` for deterministic text and stick to the Bayesian layers when resources are limited.
 
 ## Architecture Snapshot
 | Stage | Components | Purpose |
@@ -57,7 +54,7 @@ hallucinating random labels.
 ## Key Capabilities
 - **Synthetic-first pipeline**: Generates complaints, question prompts, and labeled datasets without patient data.
 - **Lay-language understanding**: Bidirectional mapping between medical and colloquial terms plus curated forum phrases.
-- **Production-ready**: Requires real transformer models and GPU acceleration for consistent results.
+- **Hybrid-friendly**: Deep-learning upgrades rely on real transformer models and GPUs, while the Bayesian/template path stays portable.
 - **Metrics and analysis**: Track diagnostic accuracy, diversity, realism, and failure cases from challenge evaluations.
 
 ## Getting Started
@@ -151,10 +148,10 @@ requests and respects a modest rate-limit by default.
 from phaita import AdversarialTrainer
 from phaita.models import ComplaintGenerator, DiagnosisDiscriminator, SymptomGenerator
 
-# Initialize models (requires GPU with 4GB+ VRAM or CPU with use_4bit=False)
+# Initialize models (GPU recommended for LLM mode; templates stay CPU-friendly)
 symptom_gen = SymptomGenerator()
-generator = ComplaintGenerator(use_pretrained=True, use_4bit=True)  # Required: use_pretrained=True
-discriminator = DiagnosisDiscriminator(use_pretrained=True)  # Required: use_pretrained=True
+generator = ComplaintGenerator(use_pretrained=True, use_4bit=True)
+discriminator = DiagnosisDiscriminator(use_pretrained=True)
 trainer = AdversarialTrainer(generator=generator, discriminator=discriminator)
 
 # Generate and diagnose
@@ -167,7 +164,7 @@ for candidate in predictions[0]:
     print(candidate["condition_code"], candidate["probability"])
 ```
 
-**Note**: All models now require `use_pretrained=True` (the default). Attempting to use `use_pretrained=False` will raise a `ValueError`.
+**Note**: `ComplaintGenerator` still exposes a deterministic template mode via `use_pretrained=False`. `DiagnosisDiscriminator` requires pretrained weights because its fallback encoder has been removed.
 
 ## Repository Guide
 ```
