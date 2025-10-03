@@ -4,7 +4,7 @@ Uses Mistral-7B for dynamic question generation.
 Requires transformers and bitsandbytes to be properly installed.
 """
 
-from typing import List, Optional, Dict, Set
+from typing import Any, Dict, List, Optional, Set
 import random
 import torch
 import torch.nn as nn
@@ -137,7 +137,10 @@ class QuestionGenerator(nn.Module):
     def _create_question_prompt(
         self,
         symptoms: List[str],
-        previous_answers: Optional[List[str]] = None
+        previous_answers: Optional[List[str]] = None,
+        demographics: Optional[Dict[str, Any]] = None,
+        history: Optional[Dict[str, Any]] = None,
+        asked_topics: Optional[Set[str]] = None,
     ) -> str:
         """
         Create a prompt for the LLM to generate a clarifying question.
@@ -152,27 +155,38 @@ class QuestionGenerator(nn.Module):
             Formatted prompt string
         """
         symptom_list = ", ".join(s.replace("_", " ") for s in symptoms[:5])
-        
+        demo_summary = self._summarize_demographics(demographics or {})
+        history_summary = self._summarize_history(history or {})
+        prior_answers = "; ".join(answer for answer in (previous_answers or []) if answer.strip())
+        asked_topics_text = ", ".join(sorted(asked_topics)) if asked_topics else "none"
+
         prompt = f"""[INST] You are a medical triage assistant generating a clarifying question.
 
 Patient symptoms: {symptom_list}
+Known demographics: {demo_summary}
+Known history: {history_summary}
+Information already provided: {prior_answers if prior_answers else 'none'}
+Topics already asked about: {asked_topics_text}
 
 Generate ONE brief, clear clarifying question to better understand the patient's condition. The question should:
 - Be direct and specific
 - Help differentiate between possible diagnoses
 - Be easy for a patient to answer
-- Focus on timing, severity, or associated symptoms
+- Focus on timing, severity, associated symptoms, or missing demographic/history details
+- Avoid repeating topics already discussed unless clarification is needed
 
 Question: [/INST]"""
-        
+
         return prompt
-    
+
     def _generate_with_llm(
         self,
         symptoms: List[str],
         previous_answers: Optional[List[str]] = None,
         previous_questions: Optional[List[str]] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
+        demographics: Optional[Dict[str, Any]] = None,
+        history: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Generate question using LLM.
@@ -196,7 +210,28 @@ Question: [/INST]"""
             )
         
         try:
-            prompt = self._create_question_prompt(symptoms, previous_answers)
+            asked_topics: Set[str] = set()
+            if conversation_history:
+                for entry in conversation_history:
+                    question_text = (entry.get("question") or "").lower()
+                    if "age" in question_text:
+                        asked_topics.add("age")
+                    if "medication" in question_text:
+                        asked_topics.add("medications")
+                    if "allerg" in question_text:
+                        asked_topics.add("allergies")
+                    if "family" in question_text:
+                        asked_topics.add("family history")
+                    if "work" in question_text or "occupation" in question_text:
+                        asked_topics.add("occupation")
+
+            prompt = self._create_question_prompt(
+                symptoms,
+                previous_answers,
+                demographics=demographics,
+                history=history,
+                asked_topics=asked_topics,
+            )
             
             inputs = self.tokenizer(
                 prompt,
@@ -247,6 +282,8 @@ Question: [/INST]"""
         previous_answers: Optional[List[str]] = None,
         previous_questions: Optional[List[str]] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
+        demographics: Optional[Dict[str, Any]] = None,
+        history: Optional[Dict[str, Any]] = None,
         *,
         num_candidates: Optional[int] = None,
     ) -> List[str]:
@@ -289,6 +326,8 @@ Question: [/INST]"""
                 previous_answers=previous_answers,
                 previous_questions=list(asked),
                 conversation_history=conversation_history,
+                demographics=demographics,
+                history=history,
             )
             attempts += 1
             _try_add(question)
@@ -306,6 +345,8 @@ Question: [/INST]"""
         previous_answers: Optional[List[str]] = None,
         previous_questions: Optional[List[str]] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
+        demographics: Optional[Dict[str, Any]] = None,
+        history: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Generate a clarifying question based on symptoms using the LLM."""
 
@@ -314,9 +355,59 @@ Question: [/INST]"""
             previous_answers=previous_answers,
             previous_questions=previous_questions,
             conversation_history=conversation_history,
+            demographics=demographics,
+            history=history,
         )
 
         return candidates[0] if candidates else ""
+
+    @staticmethod
+    def _summarize_demographics(demographics: Dict[str, Any]) -> str:
+        if not demographics:
+            return "unknown"
+        parts: List[str] = []
+        inclusion = demographics.get("inclusion", {})
+        age_ranges = inclusion.get("age_ranges")
+        if age_ranges:
+            formatted = []
+            for entry in age_ranges[:2]:
+                minimum = entry.get("min")
+                maximum = entry.get("max")
+                if minimum is None and maximum is None:
+                    continue
+                if minimum == maximum:
+                    formatted.append(f"age {minimum}")
+                else:
+                    formatted.append(f"age {minimum}-{maximum}")
+            if formatted:
+                parts.append(", ".join(formatted))
+        for key in ("sexes", "ethnicities", "occupations", "social_history", "risk_factors", "exposures"):
+            values = inclusion.get(key)
+            if values:
+                parts.append(f"{key.replace('_', ' ')}: {', '.join(values[:3])}")
+        return "; ".join(parts) if parts else "unspecified"
+
+    @staticmethod
+    def _summarize_history(history: Dict[str, Any]) -> str:
+        if not history:
+            return "unknown"
+        inclusion = history.get("inclusion", {})
+        parts: List[str] = []
+        for key in (
+            "past_conditions",
+            "medications",
+            "allergies",
+            "recent_events",
+            "family_history",
+            "lifestyle",
+            "supports",
+        ):
+            values = inclusion.get(key)
+            if values:
+                parts.append(f"{key.replace('_', ' ')}: {', '.join(values[:3])}")
+        if inclusion.get("last_meal"):
+            parts.append("last meal noted")
+        return "; ".join(parts) if parts else "no details"
     
     def generate_followup_questions(
         self,

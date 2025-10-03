@@ -1,13 +1,17 @@
 """Utilities for generating patient-facing content."""
 
 from .patient_agent import (
-    PatientSimulator,
+    PatientDemographics,
+    PatientHistory,
     PatientPresentation,
+    PatientSimulator,
     VocabularyProfile,
 )
 
 __all__ = [
-    "PatientSimulator",
+    "PatientDemographics",
+    "PatientHistory",
     "PatientPresentation",
+    "PatientSimulator",
     "VocabularyProfile",
 ]

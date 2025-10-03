@@ -75,6 +75,42 @@ def _format_ground_truth_summary(
     lines.append(f"Condition Code: {presentation.condition_code}")
     lines.append(f"Condition Name: {condition['name']}")
 
+    demographics = presentation.demographics
+    lines.append("Demographics:")
+    lines.append(f"  - Age: {demographics.age}")
+    lines.append(f"  - Sex: {demographics.sex}")
+    if demographics.ethnicity:
+        lines.append(f"  - Ethnicity: {demographics.ethnicity}")
+    if demographics.occupation:
+        lines.append(f"  - Occupation: {demographics.occupation}")
+    if demographics.social_history:
+        lines.append("  - Social History: " + ", ".join(demographics.social_history))
+    if demographics.risk_factors:
+        lines.append("  - Risk Factors: " + ", ".join(demographics.risk_factors))
+    if demographics.notes:
+        lines.append("  - Additional Notes: " + ", ".join(demographics.notes))
+
+    history = presentation.history_profile
+    lines.append("History Highlights:")
+    if history.past_conditions:
+        lines.append("  - Past Conditions: " + ", ".join(history.past_conditions))
+    if history.medications:
+        lines.append("  - Medications: " + ", ".join(history.medications))
+    if history.allergies:
+        lines.append("  - Allergies: " + ", ".join(history.allergies))
+    if history.last_meal:
+        lines.append(f"  - Last Meal: {history.last_meal}")
+    if history.recent_events:
+        lines.append("  - Recent Events: " + ", ".join(history.recent_events))
+    if history.family_history:
+        lines.append("  - Family History: " + ", ".join(history.family_history))
+    if history.lifestyle:
+        lines.append("  - Lifestyle: " + ", ".join(history.lifestyle))
+    if history.supports:
+        lines.append("  - Supports: " + ", ".join(history.supports))
+    if history.immunizations:
+        lines.append("  - Immunizations: " + ", ".join(history.immunizations))
+
     true_symptoms = ", ".join(presentation.symptoms)
     lines.append(f"True Symptoms: {true_symptoms if true_symptoms else 'None'}")
 

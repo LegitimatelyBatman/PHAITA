@@ -15,6 +15,8 @@ from .models.generator import SymptomGenerator, ComplaintGenerator
 from .models.discriminator import DiagnosisDiscriminator
 from .models.bayesian_network import BayesianSymptomNetwork
 from .generation.patient_agent import (
+    PatientDemographics,
+    PatientHistory,
     PatientPresentation,
     PatientSimulator,
     VocabularyProfile,
@@ -48,6 +50,8 @@ __all__ = [
     "ComplaintGenerator",
     "DiagnosisDiscriminator",
     "BayesianSymptomNetwork",
+    "PatientDemographics",
+    "PatientHistory",
     "PatientPresentation",
     "PatientSimulator",
     "VocabularyProfile",

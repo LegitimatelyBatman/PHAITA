@@ -14,6 +14,7 @@ class StubQuestionGenerator:
         previous_answers=None,
         previous_questions=None,
         conversation_history=None,
+        **kwargs,
     ):
         if self._calls == 0:
             self._calls += 1

@@ -179,9 +179,65 @@ class DiagnosisDiscriminator(nn.Module):
                             seen.add(variant)
                             keywords.append(variant)
 
+            demographics = data.get("demographics", {})
+            history = data.get("history", {})
+
+            for term in self._flatten_demographic_terms(demographics):
+                if term not in seen:
+                    seen.add(term)
+                    keywords.append(term)
+            for term in self._flatten_history_terms(history):
+                if term not in seen:
+                    seen.add(term)
+                    keywords.append(term)
+
             keyword_index[code] = keywords
 
         return keyword_index
+
+    @staticmethod
+    def _flatten_demographic_terms(demographics: Dict[str, Any]) -> List[str]:
+        terms: List[str] = []
+        for block in demographics.values():
+            age_ranges = block.get("age_ranges") if isinstance(block, dict) else None
+            if age_ranges:
+                for entry in age_ranges:
+                    minimum = entry.get("min")
+                    maximum = entry.get("max")
+                    if minimum is None and maximum is None:
+                        continue
+                    if minimum == maximum:
+                        terms.append(f"age {int(minimum)}")
+                    else:
+                        terms.append(f"age {int(minimum)}-{int(maximum)}")
+            for key, value in block.items():
+                if key == "age_ranges":
+                    continue
+                if isinstance(value, list):
+                    for entry in value:
+                        normalized = str(entry).strip().lower()
+                        if normalized:
+                            terms.append(normalized)
+        return terms
+
+    @staticmethod
+    def _flatten_history_terms(history: Dict[str, Any]) -> List[str]:
+        terms: List[str] = []
+        for block in history.values():
+            if not isinstance(block, dict):
+                continue
+            for key, value in block.items():
+                if isinstance(value, list):
+                    for entry in value:
+                        normalized = str(entry).strip().lower()
+                        if normalized:
+                            terms.append(normalized)
+                elif key == "last_meal" and value:
+                    for entry in value:
+                        normalized = str(entry).strip().lower()
+                        if normalized:
+                            terms.append(normalized)
+        return terms
 
     def reload_conditions(self, conditions: Optional[Dict[str, Dict]] = None) -> None:
         """Reload respiratory conditions and rebuild keyword index."""
