@@ -1,5 +1,7 @@
 """Tests for the dialogue engine with Bayesian belief updating."""
 
+import math
+
 from phaita.conversation.dialogue_engine import DialogueEngine, DialogueState
 from phaita.data.icd_conditions import RespiratoryConditions
 
@@ -332,6 +334,107 @@ def test_symptom_evidence_switching():
     assert "wheezing" in engine.state.denied_symptoms
 
 
+def test_numerical_stability_repeated_denials():
+    """Test numerical stability when patient denies all symptoms repeatedly."""
+    engine = DialogueEngine()
+    
+    # Collect a lot of symptoms
+    all_symptoms = set()
+    for condition_data in engine.conditions.values():
+        all_symptoms.update(condition_data.get("symptoms", []))
+        all_symptoms.update(condition_data.get("severity_indicators", []))
+    
+    # Deny many symptoms (this could cause underflow without safeguards)
+    symptoms_to_deny = list(all_symptoms)[:20]  # Deny 20 symptoms
+    
+    for symptom in symptoms_to_deny:
+        engine.update_beliefs(symptom, present=False)
+    
+    # Probabilities should still be valid (no NaN, no 0 for all)
+    probs = list(engine.state.differential_probabilities.values())
+    
+    # Check no NaN values
+    assert all(not math.isnan(p) for p in probs), "Found NaN probability"
+    
+    # Check probabilities sum to approximately 1.0
+    total = sum(probs)
+    assert abs(total - 1.0) < 0.001, f"Probabilities should sum to 1.0, got {total}"
+    
+    # Check all probabilities are positive
+    assert all(p > 0 for p in probs), "All probabilities should be positive"
+    
+    # Check probabilities are reasonable (not too extreme)
+    assert all(p < 1.0 for p in probs), "No single probability should be 1.0"
+
+
+def test_numerical_stability_underflow_recovery():
+    """Test that underflow triggers uniform distribution reset."""
+    engine = DialogueEngine()
+    
+    # Manually create a near-underflow scenario
+    # Set all probabilities to extremely small values
+    for code in engine.state.differential_probabilities:
+        engine.state.differential_probabilities[code] = 1e-15
+    
+    # Try to normalize - should trigger underflow detection and reset
+    engine._normalize_probabilities()
+    
+    # Should have been reset to uniform distribution
+    probs = list(engine.state.differential_probabilities.values())
+    n = len(probs)
+    expected_uniform = 1.0 / n
+    
+    # All probabilities should be approximately equal
+    assert all(abs(p - expected_uniform) < 0.001 for p in probs), \
+        "Underflow should trigger reset to uniform distribution"
+    
+    # Should sum to 1.0
+    assert abs(sum(probs) - 1.0) < 0.001
+
+
+def test_likelihood_bounds_enforced():
+    """Test that likelihood bounds prevent extreme values."""
+    engine = DialogueEngine()
+    
+    # Update with a symptom - the bounds should be applied
+    initial_probs = dict(engine.state.differential_probabilities)
+    engine.update_beliefs("wheezing", present=True)
+    
+    # Probabilities should have changed but remain valid
+    probs = list(engine.state.differential_probabilities.values())
+    
+    # No probability should be 0 or 1 due to bounds
+    assert all(0 < p < 1 for p in probs), \
+        "Likelihood bounds should prevent probabilities of exactly 0 or 1"
+    
+    # Test with absence
+    engine.reset()
+    engine.update_beliefs("wheezing", present=False)
+    
+    probs = list(engine.state.differential_probabilities.values())
+    assert all(0 < p < 1 for p in probs), \
+        "Likelihood bounds should prevent probabilities of exactly 0 or 1 (absence case)"
+
+
+def test_conflicting_evidence_stability():
+    """Test stability with conflicting symptom evidence."""
+    engine = DialogueEngine()
+    
+    # Confirm symptom
+    engine.update_beliefs("wheezing", present=True)
+    prob_after_confirm = dict(engine.state.differential_probabilities)
+    
+    # Deny the same symptom (conflicting)
+    engine.update_beliefs("wheezing", present=False)
+    prob_after_deny = dict(engine.state.differential_probabilities)
+    
+    # Probabilities should still be valid
+    probs = list(prob_after_deny.values())
+    assert all(not math.isnan(p) for p in probs), "No NaN values"
+    assert abs(sum(probs) - 1.0) < 0.001, "Should sum to 1.0"
+    assert all(p > 0 for p in probs), "All probabilities positive"
+
+
 def run_all_tests():
     """Run all tests and report results."""
     tests = [
@@ -353,6 +456,10 @@ def run_all_tests():
         ("Answer question increments turn count", test_answer_question_increments_turn_count),
         ("Reset functionality", test_reset),
         ("Symptom evidence switching", test_symptom_evidence_switching),
+        ("Numerical stability with repeated denials", test_numerical_stability_repeated_denials),
+        ("Numerical stability underflow recovery", test_numerical_stability_underflow_recovery),
+        ("Likelihood bounds enforced", test_likelihood_bounds_enforced),
+        ("Conflicting evidence stability", test_conflicting_evidence_stability),
     ]
     
     print("🏥 PHAITA Dialogue Engine Test Suite")
