@@ -1,0 +1,186 @@
+# Comorbidity Effects on Respiratory Symptoms
+# Clinical evidence-based symptom modifiers for common comorbidities
+# Values represent probability multipliers (>1.0 increases likelihood, <1.0 decreases)
+
+# Cardiovascular comorbidities
+hypertension:
+  # Source: ESC/ESH Guidelines 2018 - Hypertension Management
+  symptom_modifiers:
+    dyspnea: 1.2  # Increased due to left ventricular dysfunction
+    chest_pain: 1.4  # Increased due to coronary risk
+    fatigue: 1.15  # Common in uncontrolled hypertension
+    headache: 1.3  # Classic hypertension symptom
+  specific_symptoms:
+    - palpitations
+    - dizziness
+  probability: 0.3  # Probability of adding specific symptoms
+
+heart_failure:
+  # Source: ESC Heart Failure Guidelines 2021
+  symptom_modifiers:
+    dyspnea: 1.6  # Primary symptom of heart failure
+    orthopnea: 1.8  # Characteristic symptom
+    fatigue: 1.5  # Due to reduced cardiac output
+    cough: 1.3  # Nocturnal cough common in CHF
+    wheezing: 1.25  # Cardiac asthma
+  specific_symptoms:
+    - leg_swelling
+    - paroxysmal_nocturnal_dyspnea
+    - exercise_intolerance
+  probability: 0.35
+
+# Metabolic comorbidities
+diabetes:
+  # Source: ADA Standards of Medical Care in Diabetes 2023
+  symptom_modifiers:
+    fatigue: 1.3  # Common in uncontrolled diabetes
+    infection_risk: 1.5  # Increased susceptibility to infections
+    poor_wound_healing: 1.4  # Impaired healing
+    weakness: 1.2  # Due to metabolic dysregulation
+  specific_symptoms:
+    - frequent_urination
+    - increased_thirst
+    - blurred_vision
+  probability: 0.3
+
+obesity:
+  # Source: Obesity Medicine Association Guidelines 2020
+  symptom_modifiers:
+    shortness_of_breath: 1.5  # Restrictive lung pattern
+    exercise_intolerance: 1.4  # Reduced functional capacity
+    fatigue: 1.3  # Increased work of breathing
+    snoring: 1.6  # Sleep apnea risk
+    dyspnea: 1.35  # Baseline increased effort
+  specific_symptoms:
+    - sleep_disturbance
+    - daytime_sleepiness
+    - reduced_mobility
+  probability: 0.35
+
+# Immune system comorbidities
+immunocompromised:
+  # Source: CDC Guidelines for Immunocompromised Patients 2022
+  symptom_modifiers:
+    fever: 1.4  # More prone to infections
+    infection_risk: 1.8  # Significantly increased
+    fatigue: 1.4  # Chronic immune activation
+    weight_loss: 1.3  # Common in chronic conditions
+    cough: 1.25  # More susceptible to respiratory infections
+  specific_symptoms:
+    - recurrent_infections
+    - prolonged_illness
+    - night_sweats
+  probability: 0.4
+
+# Psychiatric comorbidities
+anxiety:
+  # Source: DSM-5 and Anxiety Disorders Guidelines
+  symptom_modifiers:
+    dyspnea: 1.3  # Perception of breathing difficulty
+    chest_tightness: 1.4  # Common in panic attacks
+    palpitations: 1.5  # Anxiety-related
+    hyperventilation: 1.6  # Classic anxiety symptom
+    dizziness: 1.3  # From hyperventilation
+  specific_symptoms:
+    - sense_of_doom
+    - trembling
+    - sweating
+  probability: 0.35
+
+depression:
+  # Source: WHO Depression Guidelines 2017
+  symptom_modifiers:
+    fatigue: 1.5  # Primary depression symptom
+    weakness: 1.3  # Psychomotor retardation
+    pain_sensitivity: 1.2  # Increased pain perception
+    sleep_disturbance: 1.4  # Common in depression
+  specific_symptoms:
+    - anhedonia
+    - poor_concentration
+    - appetite_changes
+  probability: 0.3
+
+# Respiratory comorbidities (cross-condition interactions)
+copd:
+  # Source: GOLD COPD Guidelines 2023
+  symptom_modifiers:
+    chronic_cough: 1.5  # Hallmark of COPD
+    sputum_production: 1.6  # Chronic bronchitis component
+    dyspnea: 1.4  # Progressive breathlessness
+    wheezing: 1.3  # Obstructive component
+    fatigue: 1.25  # Work of breathing
+  specific_symptoms:
+    - barrel_chest
+    - pursed_lip_breathing
+    - morning_symptoms
+  probability: 0.35
+
+# Condition interaction effects
+# Define how multiple conditions interact to modify symptoms
+interactions:
+  # Asthma + COPD = Asthma-COPD Overlap Syndrome (ACOS)
+  # Source: GINA/GOLD ACOS Guidelines 2023
+  asthma_copd:
+    conditions:
+      - J45.9  # Asthma
+      - J44.9  # COPD
+    symptom_modifiers:
+      chronic_cough: 0.9  # Increase to 90% probability
+      sputum_production: 0.85  # High probability
+      wheezing: 0.88  # Very common in ACOS
+      dyspnea: 0.92  # Nearly universal
+    note: "Asthma-COPD Overlap Syndrome (ACOS) - requires careful phenotyping"
+
+  # Heart Failure + COPD
+  # Source: Heart Failure and COPD Comorbidity Reviews
+  heart_failure_copd:
+    conditions:
+      - J44.9  # COPD
+    comorbidity: heart_failure
+    symptom_modifiers:
+      dyspnea: 1.8  # Additive effect
+      orthopnea: 1.7  # Characteristic
+      peripheral_edema: 1.9  # Common
+      cough: 1.5  # Both conditions contribute
+    note: "Challenging differential - both cause dyspnea and exercise limitation"
+
+  # Diabetes + Pneumonia
+  # Source: Diabetes and Infection Risk Literature
+  diabetes_infection:
+    conditions:
+      - J18.9  # Pneumonia
+      - J15.9  # Bacterial pneumonia
+    comorbidity: diabetes
+    symptom_modifiers:
+      fever: 1.3  # May be blunted but overall risk higher
+      infection_severity: 1.6  # Worse outcomes
+      poor_wound_healing: 1.5  # Delayed recovery
+    note: "Increased infection severity and delayed recovery in diabetics"
+
+  # Obesity + Sleep Apnea + Respiratory Conditions
+  obesity_respiratory:
+    conditions:
+      - J45.9  # Asthma
+      - J44.9  # COPD
+    comorbidity: obesity
+    symptom_modifiers:
+      dyspnea: 1.6  # Significant impact
+      exercise_intolerance: 1.7  # Marked limitation
+      sleep_disturbance: 1.8  # OSA overlap
+    note: "Obesity hypoventilation syndrome risk - consider BiPAP evaluation"
+
+# Maximum symptom probability cap
+max_probability: 0.95
+
+# Notes on clinical usage
+clinical_notes: |
+  These modifiers are based on clinical evidence but should be used for
+  educational and research purposes only. Real clinical decision-making
+  requires comprehensive patient assessment, physical examination,
+  and appropriate diagnostic testing.
+  
+  Comorbidity effects are multiplicative with baseline symptom probabilities
+  and are capped at 0.95 to maintain realistic distributions.
+  
+  Interaction effects supersede individual comorbidity effects when
+  multiple conditions are present.
