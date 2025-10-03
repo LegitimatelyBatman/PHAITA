@@ -349,7 +349,9 @@ class DiagnosisDiscriminator(nn.Module):
     def predict_diagnosis(
         self,
         complaints: List[str],
-        top_k: int = 1
+        top_k: int = 1,
+        use_mc_dropout: bool = True,
+        num_mc_samples: int = 20
     ) -> List[List[Dict[str, Any]]]:
         """Predict ranked differential diagnosis lists for patient complaints.
 
@@ -357,6 +359,10 @@ class DiagnosisDiscriminator(nn.Module):
             complaints: List of patient complaint strings.
             top_k: Number of top predictions to return per complaint. The
                 predictions are ordered by probability (highest first).
+            use_mc_dropout: Whether to use Monte Carlo Dropout for uncertainty
+                estimation (default: True). When False, uses single forward pass.
+            num_mc_samples: Number of MC dropout samples for uncertainty estimation
+                (default: 20). Only used if use_mc_dropout is True.
 
         Returns:
             A list with one entry per complaint. Each entry is a list of
@@ -366,53 +372,86 @@ class DiagnosisDiscriminator(nn.Module):
                 - ``probability``: Model probability for the diagnosis
                 - ``confidence_interval``: Tuple of (lower, upper) bounds
                 - ``evidence``: Supporting symptom and severity indicators
+                - ``uncertainty``: Uncertainty score (0-1, lower is more certain)
+                - ``confidence_level``: "high" or "low" based on uncertainty threshold
         """
         if top_k <= 0:
             raise ValueError("top_k must be greater than zero")
 
-        self.eval()
+        # Get predictions with or without MC dropout
+        if use_mc_dropout:
+            mean_probs, std_probs = self.predict_with_uncertainty(complaints, num_mc_samples)
+            # Calculate entropy for epistemic uncertainty
+            entropy_scores = self._calculate_entropy(mean_probs)
+        else:
+            self.eval()
+            with torch.no_grad():
+                outputs = self.forward(complaints)
+                diagnosis_logits = outputs["diagnosis_logits"]
+                mean_probs = F.softmax(diagnosis_logits, dim=1)
+                std_probs = torch.zeros_like(mean_probs)
+                entropy_scores = self._calculate_entropy(mean_probs)
+
         ranked_predictions: List[List[Dict[str, Any]]] = []
-        with torch.no_grad():
-            outputs = self.forward(complaints)
-            diagnosis_logits = outputs["diagnosis_logits"]
+        
+        for idx, prob_distribution in enumerate(mean_probs):
+            complaint_predictions: List[Dict[str, Any]] = []
+            
+            # Calculate uncertainty metrics for this complaint
+            entropy = entropy_scores[idx].item()
+            # Normalize entropy to [0, 1] range (max entropy is log(num_conditions))
+            max_entropy = math.log(self.num_conditions)
+            normalized_entropy = min(entropy / max_entropy, 1.0) if max_entropy > 0 else 0.0
+            
+            # For MC dropout, also consider prediction variance
+            if use_mc_dropout:
+                prediction_variance = std_probs[idx].mean().item()
+                # Combine entropy and variance for overall uncertainty
+                uncertainty_score = 0.7 * normalized_entropy + 0.3 * min(prediction_variance * 10, 1.0)
+            else:
+                uncertainty_score = normalized_entropy
+            
+            # Extract the ordered probabilities for this complaint
+            k = min(top_k, prob_distribution.shape[0])
+            top_probs, top_indices = torch.topk(prob_distribution, k=k)
 
-            # Convert logits to probabilities
-            probs = F.softmax(diagnosis_logits, dim=1)
-
-            for idx, prob_distribution in enumerate(probs):
-                complaint_predictions: List[Dict[str, Any]] = []
-                logits_for_complaint = diagnosis_logits[idx]
-                logit_spread = (logits_for_complaint.max() - logits_for_complaint.min()).item()
+            for probability, condition_idx in zip(top_probs, top_indices):
+                prob_value = probability.item()
+                condition_code = self.condition_codes[condition_idx.item()]
+                condition_data = RespiratoryConditions.get_condition_by_code(condition_code)
+                
+                # Calculate effective sample size for confidence interval
+                logit_spread = 1.0  # Default when using MC dropout
+                if not use_mc_dropout:
+                    # Use logit spread as before
+                    logit_spread = prob_value * (1 - prob_value) * 100
                 effective_sample_size = max(int(logit_spread * 10), 20)
+                
+                confidence_interval = self._estimate_confidence_interval(
+                    prob_value,
+                    effective_sample_size
+                )
 
-                # Extract the ordered probabilities for this complaint
-                k = min(top_k, prob_distribution.shape[0])
-                top_probs, top_indices = torch.topk(prob_distribution, k=k)
+                evidence = {
+                    "key_symptoms": condition_data.get("symptoms", [])[:3],
+                    "severity_indicators": condition_data.get("severity_indicators", [])[:2],
+                    "description": condition_data.get("description", "")
+                }
 
-                for probability, condition_idx in zip(top_probs, top_indices):
-                    prob_value = probability.item()
-                    condition_code = self.condition_codes[condition_idx.item()]
-                    condition_data = RespiratoryConditions.get_condition_by_code(condition_code)
-                    confidence_interval = self._estimate_confidence_interval(
-                        prob_value,
-                        effective_sample_size
-                    )
+                # Determine confidence level based on uncertainty threshold
+                confidence_level = "high" if uncertainty_score < 0.3 else "low"
 
-                    evidence = {
-                        "key_symptoms": condition_data.get("symptoms", [])[:3],
-                        "severity_indicators": condition_data.get("severity_indicators", [])[:2],
-                        "description": condition_data.get("description", "")
-                    }
+                complaint_predictions.append({
+                    "condition_code": condition_code,
+                    "condition_name": condition_data.get("name", condition_code),
+                    "probability": prob_value,
+                    "confidence_interval": confidence_interval,
+                    "evidence": evidence,
+                    "uncertainty": uncertainty_score,
+                    "confidence_level": confidence_level
+                })
 
-                    complaint_predictions.append({
-                        "condition_code": condition_code,
-                        "condition_name": condition_data.get("name", condition_code),
-                        "probability": prob_value,
-                        "confidence_interval": confidence_interval,
-                        "evidence": evidence
-                    })
-
-                ranked_predictions.append(complaint_predictions)
+            ranked_predictions.append(complaint_predictions)
 
         return ranked_predictions
 
@@ -430,6 +469,67 @@ class DiagnosisDiscriminator(nn.Module):
         lower = max(0.0, probability - margin)
         upper = min(1.0, probability + margin)
         return (lower, upper)
+    
+    @staticmethod
+    def _calculate_entropy(probabilities: torch.Tensor) -> torch.Tensor:
+        """Calculate entropy of probability distribution.
+        
+        Entropy measures uncertainty in the prediction:
+        - High entropy = uncertain prediction (probabilities spread out)
+        - Low entropy = confident prediction (probabilities concentrated)
+        
+        Args:
+            probabilities: Probability distribution tensor [batch_size, num_classes]
+            
+        Returns:
+            Entropy values [batch_size]
+        """
+        # Avoid log(0) by adding small epsilon
+        epsilon = 1e-10
+        log_probs = torch.log(probabilities + epsilon)
+        entropy = -torch.sum(probabilities * log_probs, dim=1)
+        return entropy
+    
+    def predict_with_uncertainty(
+        self,
+        complaints: List[str],
+        num_samples: int = 20
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Predict with uncertainty estimation using Monte Carlo Dropout.
+        
+        This method enables dropout during inference and runs multiple forward
+        passes to estimate model uncertainty (epistemic uncertainty). The variance
+        in predictions across samples indicates how uncertain the model is.
+        
+        Args:
+            complaints: List of patient complaint strings
+            num_samples: Number of MC dropout samples to collect (default: 20)
+            
+        Returns:
+            Tuple of (mean_probabilities, std_probabilities):
+                - mean_probabilities: Mean predictions [batch_size, num_conditions]
+                - std_probabilities: Standard deviation [batch_size, num_conditions]
+        """
+        # Enable dropout for uncertainty estimation
+        self.train()
+        
+        predictions = []
+        for _ in range(num_samples):
+            with torch.no_grad():
+                outputs = self.forward(complaints)
+                diagnosis_logits = outputs["diagnosis_logits"]
+                probs = F.softmax(diagnosis_logits, dim=1)
+                predictions.append(probs)
+        
+        # Stack predictions and compute statistics
+        predictions_stack = torch.stack(predictions, dim=0)  # [num_samples, batch_size, num_conditions]
+        mean_probs = predictions_stack.mean(dim=0)
+        std_probs = predictions_stack.std(dim=0)
+        
+        # Return to eval mode
+        self.eval()
+        
+        return mean_probs, std_probs
     
     def predict_with_explanation(
         self,
