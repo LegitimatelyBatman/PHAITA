@@ -1,0 +1,134 @@
+# Temporal Symptom Progression Patterns
+# Defines typical symptom onset sequences for each respiratory condition
+# Used by TemporalPatternMatcher to score patient timelines
+
+# Each condition has a typical_progression list defining when symptoms typically appear
+# onset_hour: hours since the initial symptom (0 = first symptom)
+
+J18.9:  # Pneumonia
+  typical_progression:
+    - symptom: fever
+      onset_hour: 0
+    - symptom: cough
+      onset_hour: 12
+    - symptom: chest_pain
+      onset_hour: 24
+    - symptom: dyspnea
+      onset_hour: 48
+    - symptom: productive_cough
+      onset_hour: 72
+
+J45.9:  # Asthma
+  typical_progression:
+    - symptom: wheezing
+      onset_hour: 0
+    - symptom: shortness_of_breath
+      onset_hour: 2
+    - symptom: chest_tightness
+      onset_hour: 4
+    - symptom: cough
+      onset_hour: 6
+
+J44.9:  # COPD
+  typical_progression:
+    - symptom: cough
+      onset_hour: 0
+    - symptom: dyspnea
+      onset_hour: 24
+    - symptom: wheezing
+      onset_hour: 48
+    - symptom: chest_tightness
+      onset_hour: 72
+    - symptom: fatigue
+      onset_hour: 96
+
+J20.9:  # Acute Bronchitis
+  typical_progression:
+    - symptom: cough
+      onset_hour: 0
+    - symptom: sore_throat
+      onset_hour: 12
+    - symptom: fever
+      onset_hour: 24
+    - symptom: productive_cough
+      onset_hour: 48
+    - symptom: chest_discomfort
+      onset_hour: 72
+
+J06.9:  # Upper Respiratory Infection
+  typical_progression:
+    - symptom: sore_throat
+      onset_hour: 0
+    - symptom: nasal_congestion
+      onset_hour: 12
+    - symptom: cough
+      onset_hour: 24
+    - symptom: fever
+      onset_hour: 36
+    - symptom: fatigue
+      onset_hour: 48
+
+J93.0:  # Pneumothorax
+  typical_progression:
+    - symptom: sudden_chest_pain
+      onset_hour: 0
+    - symptom: shortness_of_breath
+      onset_hour: 1
+    - symptom: rapid_breathing
+      onset_hour: 2
+    - symptom: chest_tightness
+      onset_hour: 4
+
+J81.0:  # Pulmonary Edema
+  typical_progression:
+    - symptom: dyspnea
+      onset_hour: 0
+    - symptom: orthopnea
+      onset_hour: 6
+    - symptom: wheezing
+      onset_hour: 12
+    - symptom: cough
+      onset_hour: 18
+    - symptom: pink_frothy_sputum
+      onset_hour: 24
+
+J15.9:  # Bacterial Pneumonia
+  typical_progression:
+    - symptom: fever
+      onset_hour: 0
+    - symptom: chills
+      onset_hour: 6
+    - symptom: cough
+      onset_hour: 12
+    - symptom: productive_cough
+      onset_hour: 36
+    - symptom: chest_pain
+      onset_hour: 48
+    - symptom: dyspnea
+      onset_hour: 72
+
+J12.9:  # Viral Pneumonia
+  typical_progression:
+    - symptom: fever
+      onset_hour: 0
+    - symptom: dry_cough
+      onset_hour: 24
+    - symptom: fatigue
+      onset_hour: 36
+    - symptom: dyspnea
+      onset_hour: 72
+    - symptom: chest_discomfort
+      onset_hour: 96
+
+J21.9:  # Bronchiolitis
+  typical_progression:
+    - symptom: nasal_congestion
+      onset_hour: 0
+    - symptom: cough
+      onset_hour: 12
+    - symptom: wheezing
+      onset_hour: 24
+    - symptom: rapid_breathing
+      onset_hour: 36
+    - symptom: difficulty_feeding
+      onset_hour: 48
