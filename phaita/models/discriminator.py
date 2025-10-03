@@ -50,7 +50,8 @@ class DiagnosisDiscriminator(nn.Module):
         gnn_hidden_dim: int = 128,
         gnn_output_dim: int = 256,
         fusion_hidden_dim: int = 512,
-        dropout: float = 0.1
+        dropout: float = 0.1,
+        use_causal_edges: bool = True
     ):
         """
         Initialize the discriminator.
@@ -63,6 +64,7 @@ class DiagnosisDiscriminator(nn.Module):
             gnn_output_dim: Output dimension for GNN
             fusion_hidden_dim: Hidden dimension for fusion layer
             dropout: Dropout rate
+            use_causal_edges: Whether to use causal edges in GNN (default True)
         
         Raises:
             ValueError: If use_pretrained is False
@@ -109,7 +111,8 @@ class DiagnosisDiscriminator(nn.Module):
                 conditions=self.conditions,
                 hidden_dim=gnn_hidden_dim,
                 output_dim=gnn_output_dim,
-                dropout=dropout
+                dropout=dropout,
+                use_causal_edges=use_causal_edges
             )
             self.graph_feature_dim = gnn_output_dim
         except Exception as e:
