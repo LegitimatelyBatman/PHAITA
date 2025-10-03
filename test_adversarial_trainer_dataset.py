@@ -96,6 +96,8 @@ class DummyDiscriminator(nn.Module):
         self.condition_codes = list(self.conditions.keys())
         self.num_conditions = len(self.condition_codes)
         self.dummy_param = nn.Parameter(torch.zeros(1))
+        self.logit_scale = nn.Parameter(torch.tensor(0.4))
+        self.logit_bias = nn.Parameter(torch.tensor(-0.2))
         self.tokenizer = DummyTokenizer()
         self.feature_dim = 8
 
@@ -104,7 +106,7 @@ class DummyDiscriminator(nn.Module):
         device = self.dummy_param.device
         diagnosis_logits = torch.zeros(batch_size, self.num_conditions, device=device)
         base = torch.arange(batch_size, dtype=torch.float32, device=device)
-        discriminator_scores = (base.unsqueeze(1) * 0.2) - 0.1
+        discriminator_scores = base.unsqueeze(1) * self.logit_scale + self.logit_bias
         outputs = {
             "diagnosis_logits": diagnosis_logits,
             "discriminator_scores": discriminator_scores,
@@ -334,6 +336,7 @@ def test_train_generator_step_updates_generator_parameters():
             realism_weight=0.0,
         )
 
+        trainer.generator.dummy_param.data.fill_(1.0)
         initial_param = trainer.generator.dummy_param.detach().clone()
 
         losses = trainer.train_generator_step(batch_size=3)
@@ -341,8 +344,57 @@ def test_train_generator_step_updates_generator_parameters():
         updated_param = trainer.generator.dummy_param.detach()
 
         assert "policy_loss" in losses
-        assert not torch.allclose(initial_param, updated_param)
+        assert torch.max(torch.abs(initial_param - updated_param)).item() > 1e-7
         assert torch.isfinite(torch.tensor(list(losses.values()))).all()
+
+
+def test_discriminator_outputs_logits_and_loss_decreases():
+    with ModulePatcher():
+        trainer_module = importlib.import_module("phaita.training.adversarial_trainer")
+        importlib.reload(trainer_module)
+
+        trainer = trainer_module.AdversarialTrainer(
+            use_curriculum_learning=False,
+            use_forum_data=False,
+            realism_weight=0.0,
+        )
+
+        real_complaints = ["real_a", "real_b", "real_c"]
+        fake_complaints = ["fake_a", "fake_b", "fake_c", "fake_d"]
+        real_labels = torch.tensor([0, 1, 2], dtype=torch.long, device=trainer.device)
+
+        trainer.discriminator.eval()
+        with torch.no_grad():
+            real_outputs = trainer.discriminator(real_complaints)
+            fake_outputs = trainer.discriminator(fake_complaints)
+
+        real_logits = real_outputs["discriminator_scores"].squeeze(-1).cpu()
+        assert real_logits.min().item() < 0
+        assert real_logits.max().item() > 0
+
+        ones = torch.ones_like(real_outputs["discriminator_scores"], device=trainer.device)
+        zeros = torch.zeros_like(fake_outputs["discriminator_scores"], device=trainer.device)
+        loss_fn = trainer.adversarial_loss
+
+        initial_loss = (
+            loss_fn(real_outputs["discriminator_scores"], ones).item()
+            + loss_fn(fake_outputs["discriminator_scores"], zeros).item()
+        )
+
+        for _ in range(3):
+            trainer.train_discriminator_step(real_complaints, real_labels, fake_complaints)
+
+        trainer.discriminator.eval()
+        with torch.no_grad():
+            updated_real = trainer.discriminator(real_complaints)
+            updated_fake = trainer.discriminator(fake_complaints)
+
+        final_loss = (
+            loss_fn(updated_real["discriminator_scores"], ones).item()
+            + loss_fn(updated_fake["discriminator_scores"], zeros).item()
+        )
+
+        assert final_loss < initial_loss
 
 
 def test_train_generator_step_does_not_update_discriminator_grads():
