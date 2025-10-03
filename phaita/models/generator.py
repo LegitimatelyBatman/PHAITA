@@ -11,6 +11,7 @@ from torch.nn.utils.rnn import pad_sequence
 from typing import List, Optional, Dict, Iterable
 from .bayesian_network import BayesianSymptomNetwork
 from ..data.icd_conditions import RespiratoryConditions
+from ..data.template_loader import TemplateManager
 from ..utils.model_loader import load_model_and_tokenizer, ModelDownloadError
 from ..generation.patient_agent import (
     PatientDemographics,
@@ -117,6 +118,11 @@ class ComplaintGenerator(nn.Module):
         self.temperature = temperature
         self.top_p = top_p
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Initialize template manager for template mode
+        self.template_manager = TemplateManager()
+        
+        # Legacy term lists kept for answer_question compatibility
         self.severity_terms = [
             "mild",
             "moderate",
@@ -371,23 +377,47 @@ Patient complaint: [/INST]"""
             ) from e
 
     def _generate_template_complaint(self, presentation: PatientPresentation) -> str:
-        """Deterministic fallback complaint when no language model is available."""
+        """Deterministic fallback complaint using diverse templates."""
 
         profile = presentation.demographics
         history = presentation.history_profile
+        
+        # Format symptoms using vocabulary profile
         symptom_phrases = [
             self._format_symptom(presentation, symptom, form="phrase")
             for symptom in presentation.symptoms[: presentation.vocabulary_profile.max_terms_per_response]
         ]
-        symptoms_text = ", ".join(symptom_phrases)
-        intro = profile.summary() or "I"
+        
+        # Determine severity from symptom probabilities
+        avg_prob = sum(
+            presentation.symptom_probabilities.get(s, 0.5) 
+            for s in presentation.symptoms[:3]
+        ) / max(1, min(3, len(presentation.symptoms)))
+        
+        if avg_prob >= 0.8:
+            severity = 'severe'
+        elif avg_prob >= 0.5:
+            severity = 'moderate'
+        else:
+            severity = 'mild'
+        
+        # Get demographics summary
+        demographics_summary = profile.summary() or None
+        
+        # Get trigger if available
+        trigger = None
         if history.recent_events:
             trigger = history.recent_events[0]
-            complaint = (
-                f"{intro} started feeling unwell after {trigger} and now I'm dealing with {symptoms_text}."
-            )
-        else:
-            complaint = f"{intro} have been struggling with {symptoms_text} and it's worrying me."
+        
+        # Generate complaint using template manager
+        complaint = self.template_manager.generate_complaint(
+            symptoms=symptom_phrases,
+            age=profile.age,
+            severity=severity,
+            demographics_summary=demographics_summary,
+            trigger=trigger
+        )
+        
         return complaint
 
     def _format_symptom(
