@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import numpy as np
 from typing import List, Dict, Optional, Tuple
 import logging
+from .model_loader import robust_model_download, ModelDownloadError
 
 # Enforce required dependencies
 try:
@@ -49,11 +50,22 @@ class RealismScorer:
                 last_error: Optional[Exception] = None
                 for candidate in medical_models:
                     try:
-                        self.tokenizer = AutoTokenizer.from_pretrained(candidate)
-                        self.model = AutoModel.from_pretrained(candidate).to(self.device)
+                        self.model = robust_model_download(
+                            model_name=candidate,
+                            model_type="auto",
+                            max_retries=3,
+                            timeout=300
+                        )
+                        self.tokenizer = robust_model_download(
+                            model_name=candidate,
+                            model_type="tokenizer",
+                            max_retries=3,
+                            timeout=300
+                        )
+                        self.model = self.model.to(self.device)
                         self.logger.info(f"Loaded realism model: {candidate}")
                         break
-                    except Exception as load_error:
+                    except (ModelDownloadError, Exception) as load_error:
                         last_error = load_error
                         continue
                 else:
@@ -67,21 +79,43 @@ class RealismScorer:
                         f"- Internet connection to download models from HuggingFace Hub"
                     )
             else:
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                self.model = AutoModel.from_pretrained(model_name).to(self.device)
+                self.tokenizer = robust_model_download(
+                    model_name=model_name,
+                    model_type="tokenizer",
+                    max_retries=3,
+                    timeout=300
+                )
+                self.model = robust_model_download(
+                    model_name=model_name,
+                    model_type="auto",
+                    max_retries=3,
+                    timeout=300
+                )
+                self.model = self.model.to(self.device)
 
             self.model.eval()
 
             # Initialize perplexity scorer
             try:
-                self.perplexity_tokenizer = AutoTokenizer.from_pretrained("gpt2")
+                self.perplexity_tokenizer = robust_model_download(
+                    model_name="gpt2",
+                    model_type="tokenizer",
+                    max_retries=3,
+                    timeout=300
+                )
                 # gpt2 has no pad token by default; align with eos token for batching
                 if self.perplexity_tokenizer.pad_token is None:
                     self.perplexity_tokenizer.pad_token = self.perplexity_tokenizer.eos_token
 
-                self.perplexity_model = AutoModelForCausalLM.from_pretrained("gpt2").to(self.device)
+                self.perplexity_model = robust_model_download(
+                    model_name="gpt2",
+                    model_type="causal_lm",
+                    max_retries=3,
+                    timeout=300
+                )
+                self.perplexity_model = self.perplexity_model.to(self.device)
                 self.perplexity_model.eval()
-            except Exception as e:
+            except (ModelDownloadError, Exception) as e:
                 raise RuntimeError(
                     f"Failed to initialize perplexity model (gpt2): {e}\n"
                     f"Requirements:\n"

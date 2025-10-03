@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Set
 import random
 import torch
 import torch.nn as nn
+from ..utils.model_loader import load_model_and_tokenizer, ModelDownloadError
 
 # Enforce required dependencies
 try:
@@ -98,17 +99,21 @@ class QuestionGenerator(nn.Module):
                     bnb_4bit_quant_type="nf4"
                 )
                 
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_name,
+                self.model, self.tokenizer = load_model_and_tokenizer(
+                    model_name=model_name,
+                    model_type="causal_lm",
+                    max_retries=3,
+                    timeout=300,
                     quantization_config=quantization_config,
                     device_map="auto",
                     trust_remote_code=True
                 )
             else:
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_name,
+                self.model, self.tokenizer = load_model_and_tokenizer(
+                    model_name=model_name,
+                    model_type="causal_lm",
+                    max_retries=3,
+                    timeout=300,
                     torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
                     device_map="auto" if torch.cuda.is_available() else None,
                     trust_remote_code=True
@@ -119,6 +124,17 @@ class QuestionGenerator(nn.Module):
             
             self.model.eval()
             print(f"✓ Loaded {model_name} successfully")
+        except ModelDownloadError as e:
+            raise RuntimeError(
+                f"Failed to load model {model_name}. "
+                f"{e}\n"
+                f"Requirements:\n"
+                f"- transformers==4.46.0\n"
+                f"- bitsandbytes==0.44.1 (for 4-bit quantization)\n"
+                f"- torch==2.5.1\n"
+                f"- CUDA GPU with 4GB+ VRAM recommended (CPU mode available with use_4bit=False)\n"
+                f"- Internet connection to download model from HuggingFace Hub"
+            ) from e
         except Exception as e:
             raise RuntimeError(
                 f"Failed to load model {model_name}. "
