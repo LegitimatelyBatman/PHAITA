@@ -14,6 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ..data.icd_conditions import RespiratoryConditions
+from ..utils.model_loader import load_model_and_tokenizer, ModelDownloadError
 
 # Enforce required dependencies
 try:
@@ -86,15 +87,28 @@ class DiagnosisDiscriminator(nn.Module):
 
         RespiratoryConditions.register_reload_hook(self.reload_conditions)
         
-        # Initialize text encoder (DeBERTa)
+        # Initialize text encoder (DeBERTa) with retry logic
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.text_encoder = AutoModel.from_pretrained(model_name)
+            self.text_encoder, self.tokenizer = load_model_and_tokenizer(
+                model_name=model_name,
+                model_type="auto",
+                max_retries=3,
+                timeout=300
+            )
             self.text_feature_dim = self.text_encoder.config.hidden_size  # 768 for base
             
             if freeze_encoder:
                 for param in self.text_encoder.parameters():
                     param.requires_grad = False
+        except ModelDownloadError as e:
+            raise RuntimeError(
+                f"Failed to load text encoder {model_name}. "
+                f"{e}\n"
+                f"Requirements:\n"
+                f"- transformers==4.46.0\n"
+                f"- torch==2.5.1\n"
+                f"- Internet connection to download model from HuggingFace Hub"
+            ) from e
         except Exception as e:
             raise RuntimeError(
                 f"Failed to load text encoder {model_name}. "
