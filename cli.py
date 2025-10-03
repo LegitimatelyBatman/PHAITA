@@ -603,20 +603,35 @@ def challenge_command(args):
             ("J44.1", ["heart_failure"]),
             ("J18.9", ["immunocompromised"])
         ]
-        
+
         for i, (condition, comorbidities) in enumerate(comorbidity_cases):
             symptoms, metadata = network.sample_symptoms(
                 condition,
-                comorbidities=comorbidities,
                 severity="moderate"
             )
-            
+
+            comorbidity_hints = [
+                f"history_of_{_normalize_symptom(comorbidity)}"
+                for comorbidity in comorbidities
+            ]
+            augmented_symptoms = list(dict.fromkeys(list(symptoms) + comorbidity_hints))
+
+            metadata = dict(metadata or {})
+            metadata["comorbidities"] = list(comorbidities)
+            if comorbidity_hints:
+                notes = list(metadata.get("notes", []))
+                notes.append(
+                    "Includes comorbidity cues: " + ", ".join(comorbidities)
+                )
+                metadata["notes"] = notes
+                metadata["comorbidity_hints"] = comorbidity_hints
+
             print(f"   {i+1}. {condition} with {', '.join(comorbidities)}")
             challenge_cases.append({
                 "type": "comorbidity",
                 "condition": condition,
                 "comorbidities": comorbidities,
-                "symptoms": symptoms,
+                "symptoms": augmented_symptoms,
                 "metadata": metadata
             })
         
