@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
+
+import yaml
 
 from ..data.icd_conditions import RespiratoryConditions
 from ..models.bayesian_network import BayesianSymptomNetwork
@@ -51,6 +55,7 @@ class DialogueEngine:
         initial_prior: Optional[Dict[str, float]] = None,
         max_turns: int = 10,
         confidence_threshold: float = 0.7,
+        use_temporal_module: bool = True,
     ):
         """Initialize the dialogue engine with Bayesian belief tracking."""
         # Load conditions
@@ -75,6 +80,26 @@ class DialogueEngine:
         else:
             self.state.differential_probabilities = dict(initial_prior)
             self._normalize_probabilities()
+        
+        # Initialize temporal module if enabled
+        self.use_temporal_module = use_temporal_module
+        self.timeline = None
+        self.temporal_module = None
+        
+        if use_temporal_module:
+            try:
+                from ..models.temporal_module import SymptomTimeline, TemporalPatternMatcher
+                
+                self.timeline = SymptomTimeline()
+                
+                # Load temporal patterns from config
+                temporal_patterns = self._load_temporal_patterns()
+                self.temporal_module = TemporalPatternMatcher(temporal_patterns)
+            except ImportError:
+                # Temporal module not available, disable feature
+                self.use_temporal_module = False
+                self.timeline = None
+                self.temporal_module = None
     
     def _normalize_probabilities(self) -> None:
         """Normalize probabilities to sum to 1.0."""
@@ -83,24 +108,52 @@ class DialogueEngine:
             for code in self.state.differential_probabilities:
                 self.state.differential_probabilities[code] /= total
     
+    def _load_temporal_patterns(self) -> Dict[str, Dict]:
+        """Load temporal progression patterns from YAML config.
+        
+        Returns:
+            Dictionary mapping condition codes to temporal patterns
+        """
+        # Find config file
+        config_path = Path(__file__).resolve().parents[2] / "config" / "temporal_patterns.yaml"
+        
+        if not config_path.exists():
+            return {}
+        
+        try:
+            with open(config_path, "r") as f:
+                patterns = yaml.safe_load(f)
+                return patterns or {}
+        except Exception:
+            return {}
+    
     def update_beliefs(
         self,
         symptom: str,
         present: bool,
+        hours_since_onset: Optional[float] = None,
     ) -> None:
         """Update condition probabilities using Bayes' rule.
         
         Applies Bayesian inference:
         P(condition | symptom) ∝ P(symptom | condition) * P(condition)
         
+        If temporal information is provided and temporal module is enabled,
+        also applies temporal pattern matching to adjust probabilities.
+        
         Args:
             symptom: Symptom name to update with
             present: True if symptom is present, False if absent
+            hours_since_onset: Optional hours since symptom first appeared
         """
         # Track the evidence
         if present:
             self.state.confirmed_symptoms.add(symptom)
             self.state.denied_symptoms.discard(symptom)
+            
+            # Add to timeline if temporal info provided
+            if hours_since_onset is not None and self.timeline is not None:
+                self.timeline.add_symptom(symptom, hours_since_onset)
         else:
             self.state.denied_symptoms.add(symptom)
             self.state.confirmed_symptoms.discard(symptom)
@@ -119,6 +172,19 @@ class DialogueEngine:
             # Bayesian update: posterior ∝ likelihood × prior
             prior = self.state.differential_probabilities[condition_code]
             self.state.differential_probabilities[condition_code] = likelihood * prior
+        
+        # Apply temporal pattern matching if available
+        if (
+            self.use_temporal_module 
+            and self.timeline is not None 
+            and self.temporal_module is not None
+            and hours_since_onset is not None
+        ):
+            for condition_code in self.state.differential_probabilities:
+                temporal_score = self.temporal_module.score_timeline(
+                    self.timeline, condition_code
+                )
+                self.state.differential_probabilities[condition_code] *= temporal_score
         
         # Normalize to ensure probabilities sum to 1.0
         self._normalize_probabilities()
