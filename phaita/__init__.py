@@ -22,6 +22,9 @@ from .generation.patient_agent import (
     VocabularyProfile,
 )
 
+# Import conversation components
+from .conversation.dialogue_engine import DialogueEngine, DialogueState
+
 # Import training components
 try:
     from .training.adversarial_trainer import AdversarialTrainer
@@ -56,5 +59,7 @@ __all__ = [
     "PatientSimulator",
     "VocabularyProfile",
     "AdversarialTrainer",
-    "Config"
+    "Config",
+    "DialogueEngine",
+    "DialogueState",
 ]
