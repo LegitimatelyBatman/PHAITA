@@ -3,12 +3,132 @@
     "condition_code": "J44.9",
     "condition_name": "COPD",
     "symptoms": [
+      "chronic_cough",
       "wheezing",
+      "chest_tightness"
+    ],
+    "lay_terms_used": [
+      "chest feels tight",
+      "can't breathe"
+    ],
+    "patient_complaint": "I've been chest feels tight and can't breathe."
+  },
+  {
+    "condition_code": "J12.9",
+    "condition_name": "Viral pneumonia",
+    "symptoms": [
+      "fever",
+      "dry_cough",
+      "myalgia",
+      "high_fever"
+    ],
+    "lay_terms_used": [
+      "dry cough",
+      "wiped out"
+    ],
+    "patient_complaint": "I've been dry cough and wiped out."
+  },
+  {
+    "condition_code": "J21.9",
+    "condition_name": "Acute bronchiolitis",
+    "symptoms": [
+      "cough",
+      "nasal_flaring",
+      "dyspnea",
+      "apnea",
+      "poor_feeding",
+      "dehydration"
+    ],
+    "lay_terms_used": [
+      "flaring nostrils",
+      "baby working hard to breathe"
+    ],
+    "patient_complaint": "I've been flaring nostrils and baby working hard to breathe."
+  },
+  {
+    "condition_code": "J81.0",
+    "condition_name": "Acute pulmonary edema",
+    "symptoms": [
+      "cough",
+      "wheezing",
+      "anxiety",
+      "extreme_breathlessness",
+      "cyanosis",
+      "confusion"
+    ],
+    "lay_terms_used": [
+      "can't breathe lying down",
+      "suffocating"
+    ],
+    "patient_complaint": "I've been can't breathe lying down and suffocating."
+  },
+  {
+    "condition_code": "J06.9",
+    "condition_name": "Upper respiratory infection",
+    "symptoms": [
+      "nasal_congestion",
+      "cough",
+      "runny_nose",
+      "difficulty_swallowing"
+    ],
+    "lay_terms_used": [
+      "sniffles",
+      "stuffy nose"
+    ],
+    "patient_complaint": "I've been sniffles and stuffy nose."
+  },
+  {
+    "condition_code": "J45.9",
+    "condition_name": "Asthma",
+    "symptoms": [
+      "shortness_of_breath",
+      "cough",
+      "chest_tightness",
+      "cyanosis"
+    ],
+    "lay_terms_used": [
+      "gasping for air",
+      "can't breathe"
+    ],
+    "patient_complaint": "I've been gasping for air and can't breathe."
+  },
+  {
+    "condition_code": "J12.9",
+    "condition_name": "Viral pneumonia",
+    "symptoms": [
+      "dry_cough",
+      "myalgia",
+      "fatigue",
+      "severe_dyspnea"
+    ],
+    "lay_terms_used": [
+      "dry cough",
+      "viral lung infection"
+    ],
+    "patient_complaint": "I've been dry cough and viral lung infection."
+  },
+  {
+    "condition_code": "J12.9",
+    "condition_name": "Viral pneumonia",
+    "symptoms": [
+      "myalgia",
+      "headache",
+      "fever"
+    ],
+    "lay_terms_used": [
+      "dry cough",
+      "wiped out"
+    ],
+    "patient_complaint": "I've been dry cough and wiped out."
+  },
+  {
+    "condition_code": "J44.9",
+    "condition_name": "COPD",
+    "symptoms": [
+      "dyspnea",
       "sputum_production",
       "chronic_cough",
-      "severe_breathlessness",
-      "weight_loss",
-      "edema"
+      "severe_breathlessness"
     ],
     "lay_terms_used": [
       "bringing up phlegm",
@@ -17,137 +137,17 @@
     "patient_complaint": "I've been bringing up phlegm and can't breathe."
   },
   {
-    "condition_code": "J20.9",
-    "condition_name": "Acute bronchitis",
-    "symptoms": [
-      "wheezing",
-      "mild_dyspnea",
-      "sputum_production",
-      "persistent_cough"
-    ],
-    "lay_terms_used": [
-      "chest cold",
-      "can't stop coughing"
-    ],
-    "patient_complaint": "I've been chest cold and can't stop coughing."
-  },
-  {
-    "condition_code": "J81.0",
-    "condition_name": "Acute pulmonary edema",
-    "symptoms": [
-      "wheezing",
-      "orthopnea",
-      "severe_dyspnea"
-    ],
-    "lay_terms_used": [
-      "drowning feeling",
-      "fluid in lungs"
-    ],
-    "patient_complaint": "I've been drowning feeling and fluid in lungs."
-  },
-  {
-    "condition_code": "J45.9",
-    "condition_name": "Asthma",
-    "symptoms": [
-      "cough",
-      "wheezing",
-      "difficulty_breathing",
-      "tachypnea"
-    ],
-    "lay_terms_used": [
-      "can't catch my breath",
-      "can't breathe"
-    ],
-    "patient_complaint": "I've been can't catch my breath and can't breathe."
-  },
-  {
-    "condition_code": "J12.9",
-    "condition_name": "Viral pneumonia",
-    "symptoms": [
-      "dry_cough",
-      "fatigue",
-      "myalgia",
-      "confusion"
-    ],
-    "lay_terms_used": [
-      "can't breathe well",
-      "dry cough"
-    ],
-    "patient_complaint": "I've been can't breathe well and dry cough."
-  },
-  {
-    "condition_code": "J81.0",
-    "condition_name": "Acute pulmonary edema",
-    "symptoms": [
-      "orthopnea",
-      "cough",
-      "anxiety",
-      "cyanosis"
-    ],
-    "lay_terms_used": [
-      "drowning feeling",
-      "gasping for air"
-    ],
-    "patient_complaint": "I've been drowning feeling and gasping for air."
-  },
-  {
-    "condition_code": "J12.9",
-    "condition_name": "Viral pneumonia",
+    "condition_code": "J93.0",
+    "condition_name": "Spontaneous tension pneumothorax",
     "symptoms": [
       "dyspnea",
-      "headache",
-      "fatigue",
-      "confusion"
+      "sudden_chest_pain",
+      "anxiety"
     ],
     "lay_terms_used": [
-      "viral lung infection",
-      "can't breathe well"
+      "can't take deep breath",
+      "stabbing pain"
     ],
-    "patient_complaint": "I've been viral lung infection and can't breathe well."
-  },
-  {
-    "condition_code": "J20.9",
-    "condition_name": "Acute bronchitis",
-    "symptoms": [
-      "wheezing",
-      "chest_discomfort",
-      "sputum_production",
-      "blood_in_sputum",
-      "fever"
-    ],
-    "lay_terms_used": [
-      "coughing up mucus",
-      "chest cold"
-    ],
-    "patient_complaint": "I've been coughing up mucus and chest cold."
-  },
-  {
-    "condition_code": "J06.9",
-    "condition_name": "Upper respiratory infection",
-    "symptoms": [
-      "runny_nose",
-      "mild_fever",
-      "sneezing",
-      "persistent_cough"
-    ],
-    "lay_terms_used": [
-      "scratchy throat",
-      "head cold"
-    ],
-    "patient_complaint": "I've been scratchy throat and head cold."
-  },
-  {
-    "condition_code": "J18.9",
-    "condition_name": "Pneumonia",
-    "symptoms": [
-      "dyspnea",
-      "chest_pain",
-      "fatigue"
-    ],
-    "lay_terms_used": [
-      "coughing up stuff",
-      "can't breathe properly"
-    ],
-    "patient_complaint": "I've been coughing up stuff and can't breathe properly."
+    "patient_complaint": "I've been can't take deep breath and stabbing pain."
   }
 ]
