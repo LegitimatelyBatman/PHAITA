@@ -72,5 +72,6 @@ A focused audit highlighted the following improvements and remaining gaps:
 
 ## Verification Snapshot
 Automated regression coverage spans adversarial training integrations, grammar
-checks, and data realism sampling. The most recent suite runs through `pytest`
-for unit and integration targets covering the fixes above.
+checks, and data realism sampling. The most recent suite runs as plain Python
+test scripts for unit and integration targets covering the fixes above. See
+[docs/TESTING.md](docs/TESTING.md) for the complete testing guide.
