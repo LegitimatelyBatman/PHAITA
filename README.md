@@ -178,6 +178,37 @@ test_*.py              Unit and integration tests
 *.md                   Focused documentation (architecture, implementation, research notes)
 ```
 
+## Testing
+
+PHAITA includes comprehensive test suites (no pytest required - plain Python):
+
+```bash
+# Basic tests - data, Bayesian, config, synthetic generation (~10s)
+python test_basic.py
+
+# Dialogue engine tests - belief updating, information gain (~5s)
+python test_dialogue_engine.py
+
+# Diagnosis orchestrator tests - ensemble, red-flags, escalation (~3s)
+python test_diagnosis_orchestrator.py
+
+# NEW: Multi-turn dialogue integration tests (~5s)
+python test_conversation_flow.py
+
+# NEW: Escalation guidance tests (~3s)
+python test_escalation_guidance.py
+```
+
+The new integration tests validate:
+- **Complete triage sessions** (symptom → questions → diagnosis)
+- **Edge cases** (deny all symptoms, conflicting symptoms)
+- **Termination logic** (confidence threshold, turn limits)
+- **Red-flag detection** (emergency symptoms, condition-specific)
+- **Care routing** (emergency/urgent/routine escalation)
+- **Guidance text** (actionable recommendations)
+
+See [docs/TESTING_MULTI_TURN_DIALOGUES.md](docs/TESTING_MULTI_TURN_DIALOGUES.md) for detailed test documentation.
+
 ## Documentation Map
 - **PROJECT_SUMMARY.md** – Problem statement, solution outline, and roadmap.
 - **IMPLEMENTATION_SUMMARY.md** – High-level tour of major modules.
