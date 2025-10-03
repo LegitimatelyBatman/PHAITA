@@ -1,0 +1,125 @@
+# Symptom Causality Configuration
+# Defines causal and temporal relationships between symptoms
+# Used by GNN module to build more informed symptom graphs
+
+# Causal edges: directed relationships where one symptom causes or strongly predicts another
+causal_edges:
+  # Airway inflammation causes wheezing
+  - source: airway_inflammation
+    target: wheezing
+    strength: 0.9
+    evidence: "Clinical guideline: Airway inflammation is the primary mechanism of wheezing"
+  
+  # Mucus production leads to productive cough
+  - source: mucus_production
+    target: productive_cough
+    strength: 0.85
+    evidence: "Pathophysiology: Mucus accumulation triggers cough reflex"
+  
+  # Airway obstruction causes shortness of breath
+  - source: airway_obstruction
+    target: shortness_of_breath
+    strength: 0.88
+    evidence: "Respiratory mechanics: Obstruction reduces airflow capacity"
+  
+  # Hypoxia leads to cyanosis
+  - source: hypoxia
+    target: cyanosis
+    strength: 0.92
+    evidence: "Clinical sign: Insufficient oxygen causes tissue discoloration"
+  
+  # Respiratory distress causes tachypnea
+  - source: respiratory_distress
+    target: tachypnea
+    strength: 0.87
+    evidence: "Compensatory mechanism: Body increases breathing rate"
+  
+  # Chest tightness leads to difficulty breathing
+  - source: chest_tightness
+    target: difficulty_breathing
+    strength: 0.80
+    evidence: "Clinical correlation: Chest tightness restricts breathing"
+  
+  # Fever causes fatigue
+  - source: fever
+    target: fatigue
+    strength: 0.75
+    evidence: "Systemic response: Fever increases metabolic demand"
+  
+  # Infection causes fever
+  - source: infection
+    target: fever
+    strength: 0.82
+    evidence: "Immune response: Infection triggers fever"
+  
+  # Hypoxia causes confusion
+  - source: hypoxia
+    target: confusion
+    strength: 0.78
+    evidence: "Neurological: Reduced oxygen to brain affects cognition"
+  
+  # Increased work of breathing leads to use of accessory muscles
+  - source: increased_work_of_breathing
+    target: use_of_accessory_muscles
+    strength: 0.84
+    evidence: "Biomechanics: Compensatory muscle recruitment"
+
+# Temporal edges: symptom progression patterns with typical delay
+temporal_edges:
+  # Fever typically precedes fatigue
+  - earlier: fever
+    later: fatigue
+    typical_delay_hours: 24
+    strength: 0.70
+    evidence: "Clinical observation: Fatigue follows fever onset"
+  
+  # Infection precedes fever
+  - earlier: infection
+    later: fever
+    typical_delay_hours: 12
+    strength: 0.75
+    evidence: "Immune timeline: Fever develops after infection"
+  
+  # Cough precedes productive cough
+  - earlier: cough
+    later: productive_cough
+    typical_delay_hours: 48
+    strength: 0.68
+    evidence: "Clinical progression: Dry cough becomes productive"
+  
+  # Shortness of breath precedes severe distress
+  - earlier: shortness_of_breath
+    later: severe_distress
+    typical_delay_hours: 6
+    strength: 0.72
+    evidence: "Clinical deterioration: Symptoms worsen over hours"
+  
+  # Wheezing may precede respiratory distress
+  - earlier: wheezing
+    later: respiratory_distress
+    typical_delay_hours: 4
+    strength: 0.65
+    evidence: "Clinical observation: Untreated wheezing can worsen"
+  
+  # Chest pain may precede difficulty breathing
+  - earlier: chest_pain
+    later: difficulty_breathing
+    typical_delay_hours: 2
+    strength: 0.60
+    evidence: "Clinical sequence: Pain affects breathing mechanics"
+
+# Configuration for edge type embeddings in GNN
+edge_types:
+  co_occurrence: 0
+  causal: 1
+  temporal: 2
+
+# Configuration for combining different edge types
+edge_weights:
+  # How to balance different edge types
+  co_occurrence_weight: 0.4  # Base weight for co-occurrence edges
+  causal_weight: 1.0         # Full weight for causal edges
+  temporal_weight: 0.6       # Moderate weight for temporal edges
+  
+  # For reverse causal edges (target -> source)
+  reverse_causal_factor: 0.3  # Reverse edges get 30% of forward weight
