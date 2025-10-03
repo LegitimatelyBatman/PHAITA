@@ -46,6 +46,62 @@ except ImportError as e:
         return None
 
 
+_QUESTION_GENERATOR_FALLBACK_WARNED = False
+
+
+class LightweightQuestionGenerator:
+    """Fallback question generator used when pretrained model is unavailable."""
+
+    def __init__(self, *, use_pretrained: bool = True, **_: dict):
+        if not use_pretrained:
+            raise ValueError("LightweightQuestionGenerator requires use_pretrained=True.")
+        self._index = 0
+        self._templates = [
+            "Could you describe when the symptoms first started?",
+            "Have you noticed anything that makes the symptoms better or worse?",
+            "Are there any other symptoms you haven't mentioned yet?",
+        ]
+
+    def generate_clarifying_question(
+        self,
+        symptoms,
+        previous_answers=None,
+        previous_questions=None,
+        conversation_history=None,
+        **_: dict,
+    ):
+        if self._index < len(self._templates):
+            question = self._templates[self._index]
+        elif symptoms:
+            symptom = symptoms[min(self._index - len(self._templates), len(symptoms) - 1)]
+            readable = symptom.replace("_", " ")
+            question = f"Could you share more details about the {readable}?"
+        else:
+            question = None
+
+        self._index += 1
+        return question
+
+
+def _build_question_generator() -> QuestionGenerator:
+    """Construct a question generator, falling back to a lightweight stub if needed."""
+
+    global _QUESTION_GENERATOR_FALLBACK_WARNED
+
+    try:
+        return QuestionGenerator(use_pretrained=True)
+    except Exception as exc:  # pragma: no cover - exercised in minimal environments
+        if not _QUESTION_GENERATOR_FALLBACK_WARNED:
+            print(
+                "⚠️ Unable to load the pretrained question generator. "
+                "Install transformers, bitsandbytes, and ensure hardware compatibility."
+            )
+            print(f"   Details: {exc}")
+            print("   Falling back to a lightweight template-based question generator.")
+            _QUESTION_GENERATOR_FALLBACK_WARNED = True
+        return LightweightQuestionGenerator(use_pretrained=True)
+
+
 def setup_logging(verbose: bool = False):
     """Setup logging configuration."""
     level = logging.DEBUG if verbose else logging.INFO
@@ -325,7 +381,7 @@ def conversation_command(args):
     print("🗣️  PHAITA Conversation Engine")
     print("=" * 40)
 
-    qgen = QuestionGenerator(use_pretrained=False)
+    qgen = _build_question_generator()
     engine = ConversationEngine(
         qgen,
         max_questions=args.max_questions,
@@ -377,7 +433,7 @@ def diagnose_command(args):
 
     try:
         discriminator = _get_diagnosis_discriminator()
-        question_generator = QuestionGenerator(use_pretrained=False)
+        question_generator = _build_question_generator()
 
         def run_session(complaint: str):
             if not complaint:
@@ -581,7 +637,7 @@ def challenge_command(args):
                 complaint = _generate_complaint_from_symptoms(case["symptoms"], case.get("metadata", {}))
 
             engine = ConversationEngine(
-                QuestionGenerator(use_pretrained=False),
+                _build_question_generator(),
                 max_questions=4,
                 min_symptom_count=3,
                 max_no_progress_turns=2,
