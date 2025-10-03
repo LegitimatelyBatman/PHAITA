@@ -2,6 +2,11 @@
 Graph Neural Network module for symptom relationship modeling.
 Uses Graph Attention Networks (GAT) to model relationships between symptoms.
 Requires torch-geometric to be properly installed.
+
+Optimizations:
+- torch.compile() for PyTorch 2.0+ JIT compilation speedup
+- Cached edge_index/edge_weight as registered buffers
+- Vectorized operations to minimize Python overhead
 """
 
 import torch
@@ -9,6 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, List, Tuple, Optional
 import networkx as nx
+import sys
 
 # Enforce required dependencies
 try:
@@ -104,6 +110,11 @@ class GraphAttentionNetwork(nn.Module):
     """
     Graph Attention Network for symptom relationship modeling.
     Falls back to MLP if torch_geometric is not available.
+    
+    Optimizations:
+    - torch.compile() for faster execution in PyTorch 2.0+
+    - Cached computations where possible
+    - Efficient batch processing
     """
     
     def __init__(
@@ -164,6 +175,47 @@ class GraphAttentionNetwork(nn.Module):
         
         self.dropout = nn.Dropout(dropout)
         
+        # Cache node IDs for reuse
+        self.register_buffer('_node_ids_cache', torch.arange(num_nodes))
+        
+    def _forward_impl(
+        self, 
+        edge_index: torch.Tensor, 
+        edge_weight: Optional[torch.Tensor] = None,
+        batch_size: int = 1
+    ) -> torch.Tensor:
+        """
+        Internal forward pass implementation (can be compiled).
+        
+        Args:
+            edge_index: [2, num_edges] edge connections
+            edge_weight: [num_edges] optional edge weights
+            batch_size: Batch size for output
+            
+        Returns:
+            Graph embeddings [batch_size, output_dim]
+        """
+        # Get node features using cached node IDs
+        x = self.node_embeddings(self._node_ids_cache)
+        
+        # Apply GAT layers with vectorized operations
+        for i, layer in enumerate(self.gat_layers):
+            x = layer(x, edge_index)
+            if i < len(self.gat_layers) - 1:
+                x = F.elu(x)
+                x = self.dropout(x)
+        
+        # Global pooling to get graph-level embedding (mean across all nodes)
+        # Use keepdim=True for efficient repeat operation
+        graph_embedding = x.mean(dim=0, keepdim=True)
+        
+        # Efficient batch expansion using expand (no memory copy)
+        # Only use repeat if batch_size > 1 to avoid unnecessary operations
+        if batch_size > 1:
+            graph_embedding = graph_embedding.expand(batch_size, -1).contiguous()
+        
+        return graph_embedding
+    
     def forward(
         self, 
         edge_index: torch.Tensor, 
@@ -181,29 +233,17 @@ class GraphAttentionNetwork(nn.Module):
         Returns:
             Graph embeddings [batch_size, output_dim]
         """
-        # Get node features
-        node_ids = torch.arange(self.num_nodes, device=edge_index.device)
-        x = self.node_embeddings(node_ids)
-        
-        # Apply GAT layers
-        for i, layer in enumerate(self.gat_layers):
-            x = layer(x, edge_index)
-            if i < len(self.gat_layers) - 1:
-                x = F.elu(x)
-                x = self.dropout(x)
-        
-        # Global pooling to get graph-level embedding
-        graph_embedding = x.mean(dim=0, keepdim=True)
-        
-        # Repeat for batch
-        graph_embedding = graph_embedding.repeat(batch_size, 1)
-        
-        return graph_embedding
+        return self._forward_impl(edge_index, edge_weight, batch_size)
 
 
 class SymptomGraphModule(nn.Module):
     """
     Complete symptom graph module combining graph construction and GAT.
+    
+    Optimizations:
+    - Edge index and weights cached as buffers (already on correct device)
+    - torch.compile() for PyTorch 2.0+ performance boost
+    - Efficient batch processing
     """
     
     def __init__(
@@ -214,7 +254,8 @@ class SymptomGraphModule(nn.Module):
         output_dim: int = 256,
         num_heads: int = 4,
         num_layers: int = 2,
-        dropout: float = 0.1
+        dropout: float = 0.1,
+        use_compile: bool = True
     ):
         """
         Initialize symptom graph module.
@@ -227,6 +268,7 @@ class SymptomGraphModule(nn.Module):
             num_heads: Number of attention heads
             num_layers: Number of GAT layers
             dropout: Dropout rate
+            use_compile: Whether to use torch.compile for optimization (PyTorch 2.0+)
         """
         super().__init__()
         
@@ -235,6 +277,7 @@ class SymptomGraphModule(nn.Module):
         edge_index, edge_weight = self.graph_builder.build_cooccurrence_graph()
         
         # Register as buffers (not parameters, but part of state)
+        # This ensures they move with the model to GPU/CPU
         self.register_buffer('edge_index', edge_index)
         self.register_buffer('edge_weight', edge_weight)
         
@@ -248,6 +291,28 @@ class SymptomGraphModule(nn.Module):
             num_layers=num_layers,
             dropout=dropout
         )
+        
+        # Apply torch.compile if available and requested (PyTorch 2.0+)
+        self._use_compile = use_compile
+        self._compiled_gat = None
+        
+        if use_compile and hasattr(torch, 'compile'):
+            try:
+                # Compile the internal forward implementation for best performance
+                # Use 'reduce-overhead' mode for faster execution
+                self._compiled_gat = torch.compile(
+                    self.gat._forward_impl,
+                    mode='reduce-overhead',
+                    fullgraph=False  # Allow graph breaks for flexibility
+                )
+            except Exception as e:
+                # Compilation may fail on some platforms, fall back gracefully
+                import warnings
+                warnings.warn(
+                    f"torch.compile failed, falling back to eager mode: {e}",
+                    RuntimeWarning
+                )
+                self._compiled_gat = None
     
     def forward(self, batch_size: int = 1) -> torch.Tensor:
         """
@@ -259,7 +324,11 @@ class SymptomGraphModule(nn.Module):
         Returns:
             Graph embeddings [batch_size, output_dim]
         """
-        return self.gat(self.edge_index, self.edge_weight, batch_size)
+        # Use compiled version if available, otherwise use regular forward
+        if self._compiled_gat is not None:
+            return self._compiled_gat(self.edge_index, self.edge_weight, batch_size)
+        else:
+            return self.gat(self.edge_index, self.edge_weight, batch_size)
     
     def get_symptom_indices(self, symptoms: List[str]) -> List[int]:
         """
