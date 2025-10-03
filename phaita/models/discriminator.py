@@ -139,8 +139,7 @@ class DiagnosisDiscriminator(nn.Module):
             nn.Linear(fusion_hidden_dim // 2, 128),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(128, 1),
-            nn.Sigmoid()
+            nn.Linear(128, 1)
         )
         
         self.dropout = nn.Dropout(dropout)
