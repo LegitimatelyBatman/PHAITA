@@ -91,7 +91,7 @@ Successfully implemented causal and temporal relationship edges in PHAITA's symp
 - `config/symptom_causality.yaml`
 - `test_causal_graph.py`
 - `demo_causal_edges.py`
-- `CAUSAL_EDGES_GUIDE.md`
+- `CAUSAL_EDGES_GUIDE.md` (see docs/features/)
 
 ## Usage Example
 

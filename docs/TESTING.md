@@ -594,9 +594,9 @@ if __name__ == "__main__":
 ## Related Documentation
 
 - [TESTING_MULTI_TURN_DIALOGUES.md](TESTING_MULTI_TURN_DIALOGUES.md) - Detailed dialogue test documentation
-- [DIALOGUE_ENGINE.md](../DIALOGUE_ENGINE.md) - DialogueEngine architecture
-- [DIAGNOSIS_ORCHESTRATOR_README.md](../DIAGNOSIS_ORCHESTRATOR_README.md) - Red-flag system
-- [IMPLEMENTATION_SUMMARY.md](../IMPLEMENTATION_SUMMARY.md) - Module overview
+- [architecture/DIALOGUE_ENGINE.md](architecture/DIALOGUE_ENGINE.md) - DialogueEngine architecture
+- [architecture/DIAGNOSIS_ORCHESTRATOR_README.md](architecture/DIAGNOSIS_ORCHESTRATOR_README.md) - Red-flag system
+- [../IMPLEMENTATION_SUMMARY.md](../IMPLEMENTATION_SUMMARY.md) - Module overview
 
 ## Summary
 

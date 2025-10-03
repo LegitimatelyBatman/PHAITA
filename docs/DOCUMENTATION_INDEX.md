@@ -38,7 +38,7 @@ Complete guide to all PHAITA documentation.
 
 ### Dialogue and Conversation
 
-#### [DIALOGUE_ENGINE.md](../DIALOGUE_ENGINE.md)
+#### [docs/architecture/DIALOGUE_ENGINE.md](architecture/DIALOGUE_ENGINE.md)
 **Multi-turn dialogue system** - Architecture of the question-asking conversation engine.
 - DialogueEngine components
 - Belief updating mechanism
@@ -46,7 +46,7 @@ Complete guide to all PHAITA documentation.
 - State management across turns
 - Integration with Bayesian networks
 
-#### [DIAGNOSIS_ORCHESTRATOR_README.md](../DIAGNOSIS_ORCHESTRATOR_README.md)
+#### [docs/architecture/DIAGNOSIS_ORCHESTRATOR_README.md](architecture/DIAGNOSIS_ORCHESTRATOR_README.md)
 **Red-flag integration** - How diagnosis orchestration works with emergency detection.
 - DiagnosisOrchestrator class
 - Red-flag symptom mappings (config/red_flags.yaml)
@@ -55,7 +55,7 @@ Complete guide to all PHAITA documentation.
 - Guidance text generation
 - **11 comprehensive tests included**
 
-#### [IMPLEMENTATION_DIALOGUE_ENGINE.md](../IMPLEMENTATION_DIALOGUE_ENGINE.md)
+#### [docs/architecture/IMPLEMENTATION_DIALOGUE_ENGINE.md](architecture/IMPLEMENTATION_DIALOGUE_ENGINE.md)
 **Detailed dialogue implementation** - Deep dive into dialogue engine internals.
 - Implementation details
 - Algorithm descriptions
@@ -79,7 +79,7 @@ Complete guide to all PHAITA documentation.
 - Model parameters and sizes
 - Training procedures
 
-#### [MODEL_LOADER_GUIDE.md](../MODEL_LOADER_GUIDE.md)
+#### [docs/features/MODEL_LOADER_GUIDE.md](features/MODEL_LOADER_GUIDE.md)
 **Model loading utilities** - How model initialization and caching works.
 - Model loader API
 - Quantization support
@@ -89,28 +89,28 @@ Complete guide to all PHAITA documentation.
 
 ### Graph Neural Networks
 
-#### [GNN_QUICK_REFERENCE.md](../GNN_QUICK_REFERENCE.md)
+#### [docs/features/GNN_QUICK_REFERENCE.md](features/GNN_QUICK_REFERENCE.md)
 **GNN module quick guide** - Fast reference for symptom graph features.
 - SymptomGraphBuilder usage
 - SymptomGraphModule API
 - Performance tips
 - Example code snippets
 
-#### [GNN_OPTIMIZATION_RESULTS.md](../GNN_OPTIMIZATION_RESULTS.md)
+#### [docs/features/GNN_OPTIMIZATION_RESULTS.md](features/GNN_OPTIMIZATION_RESULTS.md)
 **GNN performance benchmarks** - Optimization results and comparisons.
 - Performance metrics
 - Memory usage
 - Speed improvements
 - Benchmark results
 
-#### [CAUSAL_EDGES_GUIDE.md](../CAUSAL_EDGES_GUIDE.md)
+#### [docs/features/CAUSAL_EDGES_GUIDE.md](features/CAUSAL_EDGES_GUIDE.md)
 **Causal relationships in symptom graphs** - Complete guide to causal edge implementation.
 - Causal edge types
 - Configuration (config/symptom_causality.yaml)
 - Usage examples
 - Clinical rationale for relationships
 
-#### [CAUSAL_EDGES_SUMMARY.md](../CAUSAL_EDGES_SUMMARY.md)
+#### [docs/features/CAUSAL_EDGES_SUMMARY.md](features/CAUSAL_EDGES_SUMMARY.md)
 **Causal edges implementation summary** - What was implemented and key results.
 - Implementation overview
 - Graph statistics
@@ -119,21 +119,21 @@ Complete guide to all PHAITA documentation.
 
 ### Advanced Features
 
-#### [TEMPORAL_MODELING_README.md](../TEMPORAL_MODELING_README.md)
+#### [docs/features/TEMPORAL_MODELING_README.md](features/TEMPORAL_MODELING_README.md)
 **Symptom progression over time** - Temporal modeling of symptom evolution.
 - SymptomTimeline tracking
 - LSTM-based temporal encoder
 - Temporal pattern matching
 - Integration with diagnosis
 
-#### [COMORBIDITY_IMPLEMENTATION.md](../COMORBIDITY_IMPLEMENTATION.md)
+#### [docs/features/COMORBIDITY_IMPLEMENTATION.md](features/COMORBIDITY_IMPLEMENTATION.md)
 **Comorbidity effects** - How chronic conditions affect symptom presentation.
 - Comorbidity modifiers (diabetes, hypertension, obesity, etc.)
 - Interaction effects (ACOS, heart failure + COPD)
 - Clinical evidence references
 - Configuration (config/comorbidity_effects.yaml)
 
-#### [IMPLEMENTATION_CHECKLIST.md](../IMPLEMENTATION_CHECKLIST.md)
+#### [docs/features/IMPLEMENTATION_CHECKLIST.md](features/IMPLEMENTATION_CHECKLIST.md)
 **Comorbidity implementation checklist** - Detailed implementation tracking.
 - Problem statement requirements
 - File changes
@@ -142,14 +142,14 @@ Complete guide to all PHAITA documentation.
 
 ### Template System
 
-#### [TEMPLATE_IMPLEMENTATION.md](../TEMPLATE_IMPLEMENTATION.md)
+#### [docs/features/TEMPLATE_IMPLEMENTATION.md](features/TEMPLATE_IMPLEMENTATION.md)
 **Template-based generation** - Detailed template system architecture.
 - 28 template patterns
 - Intelligent selection algorithm
 - Age/severity/formality factors
 - Diversity metrics
 
-#### [TEMPLATE_QUICKSTART.md](../TEMPLATE_QUICKSTART.md)
+#### [docs/features/TEMPLATE_QUICKSTART.md](features/TEMPLATE_QUICKSTART.md)
 **Template system quick start** - Fast guide to template generation.
 - Quick usage examples
 - Template categories
@@ -211,16 +211,16 @@ Complete guide to all PHAITA documentation.
 #### Understand the architecture
 1. [IMPLEMENTATION_SUMMARY.md](../IMPLEMENTATION_SUMMARY.md) - High-level overview
 2. [IMPLEMENTATION_DETAILS.md](../IMPLEMENTATION_DETAILS.md) - Deep-learning details
-3. [DIALOGUE_ENGINE.md](../DIALOGUE_ENGINE.md) - Conversation system
+3. [docs/architecture/DIALOGUE_ENGINE.md](architecture/DIALOGUE_ENGINE.md) - Conversation system
 
 #### Set up deep learning models
 1. [DEEP_LEARNING_GUIDE.md](../DEEP_LEARNING_GUIDE.md) - GPU setup and troubleshooting
-2. [MODEL_LOADER_GUIDE.md](../MODEL_LOADER_GUIDE.md) - Model loading utilities
+2. [docs/features/MODEL_LOADER_GUIDE.md](features/MODEL_LOADER_GUIDE.md) - Model loading utilities
 3. [README.md](../README.md) - System requirements
 
 #### Work with the dialogue system
-1. [DIALOGUE_ENGINE.md](../DIALOGUE_ENGINE.md) - Architecture and API
-2. [DIAGNOSIS_ORCHESTRATOR_README.md](../DIAGNOSIS_ORCHESTRATOR_README.md) - Red-flags and escalation
+1. [docs/architecture/DIALOGUE_ENGINE.md](architecture/DIALOGUE_ENGINE.md) - Architecture and API
+2. [docs/architecture/DIAGNOSIS_ORCHESTRATOR_README.md](architecture/DIAGNOSIS_ORCHESTRATOR_README.md) - Red-flags and escalation
 3. [TESTING_MULTI_TURN_DIALOGUES.md](TESTING_MULTI_TURN_DIALOGUES.md) - Test examples
 
 #### Customize medical knowledge
@@ -253,24 +253,30 @@ Complete guide to all PHAITA documentation.
 - IMPLEMENTATION_DETAILS.md
 - CHANGE_HISTORY.md
 - DEEP_LEARNING_GUIDE.md
-- DIALOGUE_ENGINE.md
-- IMPLEMENTATION_DIALOGUE_ENGINE.md
-- DIAGNOSIS_ORCHESTRATOR_README.md
-- MODEL_LOADER_GUIDE.md
-- GNN_QUICK_REFERENCE.md
-- GNN_OPTIMIZATION_RESULTS.md
-- CAUSAL_EDGES_GUIDE.md
-- CAUSAL_EDGES_SUMMARY.md
-- TEMPORAL_MODELING_README.md
-- COMORBIDITY_IMPLEMENTATION.md
-- IMPLEMENTATION_CHECKLIST.md
-- TEMPLATE_IMPLEMENTATION.md
-- TEMPLATE_QUICKSTART.md
 
 ### docs/ Directory
-- TESTING.md ⭐ **NEW** - Comprehensive testing guide
-- TESTING_MULTI_TURN_DIALOGUES.md - Dialogue integration tests
-- DOCUMENTATION_INDEX.md ⭐ **NEW** - This file
+
+#### Core Documentation
+- docs/DOCUMENTATION_INDEX.md ⭐ **NEW** - This file
+- docs/TESTING.md ⭐ **NEW** - Comprehensive testing guide
+- docs/TESTING_MULTI_TURN_DIALOGUES.md - Dialogue integration tests
+
+#### Architecture Documentation (docs/architecture/)
+- docs/architecture/DIALOGUE_ENGINE.md
+- docs/architecture/IMPLEMENTATION_DIALOGUE_ENGINE.md
+- docs/architecture/DIAGNOSIS_ORCHESTRATOR_README.md
+
+#### Feature Documentation (docs/features/)
+- docs/features/MODEL_LOADER_GUIDE.md
+- docs/features/GNN_QUICK_REFERENCE.md
+- docs/features/GNN_OPTIMIZATION_RESULTS.md
+- docs/features/CAUSAL_EDGES_GUIDE.md
+- docs/features/CAUSAL_EDGES_SUMMARY.md
+- docs/features/TEMPORAL_MODELING_README.md
+- docs/features/COMORBIDITY_IMPLEMENTATION.md
+- docs/features/IMPLEMENTATION_CHECKLIST.md
+- docs/features/TEMPLATE_IMPLEMENTATION.md
+- docs/features/TEMPLATE_QUICKSTART.md
 
 ### .github/ Directory
 - .github/copilot-instructions.md - Instructions for GitHub Copilot
