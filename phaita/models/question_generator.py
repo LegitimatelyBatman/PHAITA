@@ -22,13 +22,10 @@ except ImportError as e:
 
 try:
     import bitsandbytes
-except ImportError as e:
-    raise ImportError(
-        "bitsandbytes is required for 4-bit quantization in QuestionGenerator. "
-        "Install with: pip install bitsandbytes==0.44.1\n"
-        "Note: bitsandbytes requires CUDA. For CPU-only systems, this dependency must still be "
-        "installed but use_4bit=False should be passed to the model."
-    ) from e
+    HAS_BITSANDBYTES = True
+except (ImportError, ModuleNotFoundError):
+    HAS_BITSANDBYTES = False
+    # bitsandbytes is optional - will use CPU mode without quantization
 
 
 class QuestionGenerator(nn.Module):
