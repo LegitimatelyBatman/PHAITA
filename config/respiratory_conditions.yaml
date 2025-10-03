@@ -20,6 +20,54 @@ J45.9:
     - breathless
     - gasping for air
   description: Chronic inflammatory airway disease with episodic symptoms
+  demographics:
+    inclusion:
+      age_ranges:
+        - min: 12
+          max: 45
+          weight: 1.0
+        - min: 46
+          max: 65
+          weight: 0.6
+      sexes:
+        - female
+        - male
+      ethnicities:
+        - any
+      social_history:
+        - Lives in urban environment
+      risk_factors:
+        - Family history of asthma
+        - History of seasonal allergies
+      exposures:
+        - Second-hand smoke
+        - Dust at work
+    exclusion:
+      age_ranges:
+        - min: 0
+          max: 2
+      notes:
+        - Recent major chest trauma suggests alternative diagnosis
+  history:
+    inclusion:
+      past_conditions:
+        - Seasonal allergies
+        - Childhood wheezing episodes
+      medications:
+        - Rescue inhaler use as needed
+      allergies:
+        - Dust mites
+      last_meal:
+        - Ate soup 4 hours ago
+      recent_events:
+        - Symptoms began after cleaning a dusty attic
+      lifestyle:
+        - Exercises occasionally
+    exclusion:
+      medications:
+        - Daily beta blocker therapy
+      recent_events:
+        - Foreign body aspiration
 J18.9:
   name: Pneumonia
   symptoms:
@@ -43,6 +91,43 @@ J18.9:
     - burning chest
     - lung infection
   description: Infection causing inflammation of lung tissue
+  demographics:
+    inclusion:
+      age_ranges:
+        - min: 40
+          max: 80
+      sexes:
+        - female
+        - male
+      ethnicities:
+        - any
+      occupations:
+        - Retired teacher
+        - Factory worker
+      risk_factors:
+        - Smoker or former smoker
+      regions:
+        - Temperate climates
+    exclusion:
+      notes:
+        - Recent thoracic surgery without infection signs
+  history:
+    inclusion:
+      past_conditions:
+        - Chronic bronchitis
+      medications:
+        - Recent antibiotics course
+      last_meal:
+        - Light breakfast 6 hours ago
+      recent_events:
+        - Exposed to grandchild with cold
+      family_history:
+        - Respiratory illnesses in siblings
+    exclusion:
+      medications:
+        - Long-term corticosteroid prophylaxis
+      recent_events:
+        - Hospital discharge within 24 hours for another illness
 J44.9:
   name: COPD
   symptoms:
@@ -64,6 +149,50 @@ J44.9:
     - out of breath
     - chest feels tight
   description: Chronic obstructive pulmonary disease with airflow limitation
+  demographics:
+    inclusion:
+      age_ranges:
+        - min: 55
+          max: 85
+      sexes:
+        - female
+        - male
+      social_history:
+        - Long history of smoking
+      occupations:
+        - Retired miner
+        - Former factory worker
+      risk_factors:
+        - 30+ pack-year smoking history
+      notes:
+        - Uses portable oxygen occasionally
+    exclusion:
+      age_ranges:
+        - min: 0
+          max: 25
+      notes:
+        - Primary diagnosis of cystic fibrosis
+  history:
+    inclusion:
+      past_conditions:
+        - Chronic bronchitis
+        - Emphysema
+      medications:
+        - Long-acting bronchodilator
+        - Rescue inhaler
+      allergies:
+        - None known
+      last_meal:
+        - Ate oatmeal 3 hours ago
+      recent_events:
+        - Increased dyspnea after climbing stairs
+      lifestyle:
+        - Sedentary due to breathlessness
+    exclusion:
+      medications:
+        - Recently started ACE inhibitors
+      recent_events:
+        - Acute chest trauma
 J06.9:
   name: Upper respiratory infection
   symptoms:
@@ -85,6 +214,36 @@ J06.9:
     - sniffles
     - throat hurts
   description: Common cold or upper respiratory tract infection
+  demographics:
+    inclusion:
+      age_ranges:
+        - min: 5
+          max: 60
+      sexes:
+        - female
+        - male
+      social_history:
+        - Works in open-plan office
+      exposures:
+        - Recent contact with sick coworkers
+    exclusion:
+      notes:
+        - Recent travel to tropical regions with unusual pathogens
+  history:
+    inclusion:
+      past_conditions:
+        - Occasional seasonal colds
+      medications:
+        - Over-the-counter decongestant
+      last_meal:
+        - Sandwich 2 hours ago
+      recent_events:
+        - Child at home has similar symptoms
+    exclusion:
+      medications:
+        - Current chemotherapy
+      recent_events:
+        - Recent hospitalization for pneumonia
 J20.9:
   name: Acute bronchitis
   symptoms:
@@ -105,6 +264,39 @@ J20.9:
     - chest feels heavy
     - "can't stop coughing"
   description: Acute inflammation of bronchial tubes
+  demographics:
+    inclusion:
+      age_ranges:
+        - min: 18
+          max: 70
+      sexes:
+        - female
+        - male
+      occupations:
+        - School teacher
+        - Warehouse worker
+      exposures:
+        - Works around dust
+    exclusion:
+      notes:
+        - Recent diagnosis of pertussis
+  history:
+    inclusion:
+      past_conditions:
+        - Recent upper respiratory infection
+      medications:
+        - Occasional cough suppressant
+      allergies:
+        - Penicillin allergy
+      last_meal:
+        - Coffee and toast this morning
+      recent_events:
+        - Started after being caught in rain
+    exclusion:
+      medications:
+        - Chronic steroid therapy
+      recent_events:
+        - Hospitalization for COPD exacerbation in past week
 J81.0:
   name: Acute pulmonary edema
   symptoms:
@@ -127,6 +319,41 @@ J81.0:
     - fluid in lungs
     - suffocating
   description: Fluid accumulation in lung tissue
+  demographics:
+    inclusion:
+      age_ranges:
+        - min: 60
+          max: 90
+      sexes:
+        - female
+        - male
+      risk_factors:
+        - History of heart failure
+      lifestyle:
+        - Limited exercise tolerance
+    exclusion:
+      notes:
+        - Recent high-altitude travel without cardiac history
+  history:
+    inclusion:
+      past_conditions:
+        - Congestive heart failure
+      medications:
+        - Loop diuretics
+        - ACE inhibitor
+      allergies:
+        - None reported
+      last_meal:
+        - Small dinner 5 hours ago
+      recent_events:
+        - Missed diuretic doses this week
+      family_history:
+        - Heart disease in parents
+    exclusion:
+      medications:
+        - Recent IV fluid bolus for trauma
+      recent_events:
+        - Chest trauma with suspected pneumothorax
 J93.0:
   name: Spontaneous tension pneumothorax
   symptoms:
@@ -148,6 +375,36 @@ J93.0:
     - stabbing pain
     - "can't take deep breath"
   description: Air in pleural space causing lung collapse
+  demographics:
+    inclusion:
+      age_ranges:
+        - min: 18
+          max: 40
+      sexes:
+        - male
+        - female
+      risk_factors:
+        - Tall thin body habitus
+      lifestyle:
+        - Active lifestyle
+    exclusion:
+      notes:
+        - Recent invasive thoracic procedure
+  history:
+    inclusion:
+      past_conditions:
+        - None significant
+      medications:
+        - Occasional use of NSAIDs
+      allergies:
+        - None known
+      last_meal:
+        - Skipped breakfast due to sudden pain
+      recent_events:
+        - Developed symptoms while stretching after waking
+    exclusion:
+      recent_events:
+        - Penetrating chest trauma
 J15.9:
   name: Bacterial pneumonia
   symptoms:
@@ -170,6 +427,42 @@ J15.9:
     - "can't breathe right"
     - really sick
   description: Bacterial infection of lung parenchyma
+  demographics:
+    inclusion:
+      age_ranges:
+        - min: 45
+          max: 85
+      sexes:
+        - female
+        - male
+      social_history:
+        - Lives with grandchildren
+      risk_factors:
+        - Recent influenza infection
+      regions:
+        - Temperate climates
+    exclusion:
+      notes:
+        - Known aspiration event without infection
+  history:
+    inclusion:
+      past_conditions:
+        - Type 2 diabetes
+      medications:
+        - Oral hypoglycemics
+      allergies:
+        - Penicillin allergy
+      last_meal:
+        - Ate porridge 3 hours ago
+      recent_events:
+        - Worsening cough after cold snap
+      lifestyle:
+        - Limited outdoor activity
+    exclusion:
+      medications:
+        - Current macrolide therapy for another infection
+      recent_events:
+        - Hospital discharge within 48 hours
 J12.9:
   name: Viral pneumonia
   symptoms:
@@ -191,6 +484,38 @@ J12.9:
     - "can't breathe well"
     - wiped out
   description: Viral infection of lung tissue
+  demographics:
+    inclusion:
+      age_ranges:
+        - min: 20
+          max: 70
+      sexes:
+        - female
+        - male
+      exposures:
+        - Works in healthcare setting
+      lifestyle:
+        - Active family life
+    exclusion:
+      notes:
+        - Recent travel to areas with emerging pathogens without symptoms
+  history:
+    inclusion:
+      past_conditions:
+        - Seasonal influenza last year
+      medications:
+        - Occasional antiviral use
+      last_meal:
+        - Smoothie 1 hour ago
+      recent_events:
+        - Caring for sick partner
+      immunizations:
+        - Up to date on influenza vaccine
+    exclusion:
+      medications:
+        - Chronic immunosuppressants
+      recent_events:
+        - Major surgery in past 2 weeks
 J21.9:
   name: Acute bronchiolitis
   symptoms:
@@ -198,18 +523,50 @@ J21.9:
     - cough
     - dyspnea
     - tachypnea
-    - nasal_flaring
     - retractions
+    - nasal_flaring
   severity_indicators:
-    - severe_respiratory_distress
-    - cyanosis
     - apnea
+    - cyanosis
     - poor_feeding
-    - lethargy
+    - dehydration
   lay_terms:
-    - "baby can't breathe"
-    - wheezing badly
-    - working hard to breathe
-    - breathing really fast
-    - chest pulling in
-  description: Inflammation of small airways, common in infants
+    - fast breathing
+    - chest sounds tight
+    - baby working hard to breathe
+    - flaring nostrils
+  description: Inflammation of the bronchioles often seen in infants
+  demographics:
+    inclusion:
+      age_ranges:
+        - min: 0
+          max: 2
+      sexes:
+        - female
+        - male
+      social_history:
+        - Attends daycare
+      exposures:
+        - Sibling with cold symptoms
+    exclusion:
+      notes:
+        - Known chronic lung disease
+  history:
+    inclusion:
+      past_conditions:
+        - Prematurity at 35 weeks
+      medications:
+        - Vitamin D supplement
+      allergies:
+        - None reported
+      last_meal:
+        - Bottle 1 hour ago
+      recent_events:
+        - Cough started after family gathering
+      supports:
+        - Parents using humidifier at night
+    exclusion:
+      medications:
+        - Chronic steroid therapy
+      recent_events:
+        - Prior hospital admission this week for respiratory distress

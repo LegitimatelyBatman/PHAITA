@@ -12,6 +12,8 @@ from typing import List, Optional, Dict, Iterable
 from .bayesian_network import BayesianSymptomNetwork
 from ..data.icd_conditions import RespiratoryConditions
 from ..generation.patient_agent import (
+    PatientDemographics,
+    PatientHistory,
     PatientPresentation,
     PatientSimulator,
     VocabularyProfile,
@@ -106,17 +108,9 @@ class ComplaintGenerator(nn.Module):
             device: Device to load model on
         
         Raises:
-            ValueError: If use_pretrained is False
             RuntimeError: If model loading fails
         """
         super().__init__()
-
-        if not use_pretrained:
-            raise ValueError(
-                "ComplaintGenerator requires use_pretrained=True. "
-                "Template-based fallback has been removed. "
-                "Ensure transformers and bitsandbytes are properly installed."
-            )
 
         self.conditions = RespiratoryConditions.get_all_conditions()
         self.symptom_generator = SymptomGenerator(self.conditions)
@@ -151,9 +145,13 @@ class ComplaintGenerator(nn.Module):
         ]
 
         RespiratoryConditions.register_reload_hook(self.reload_conditions)
+        self.tokenizer = None
+        self.model = None
+        self.template_mode = not use_pretrained
 
-        # Load LLM
-        self._load_llm(model_name, use_4bit)
+        if use_pretrained:
+            # Load LLM
+            self._load_llm(model_name, use_4bit)
 
     def reload_conditions(self, conditions: Optional[Dict[str, Dict]] = None) -> None:
         """Refresh the condition catalogue and vocabularies at runtime."""
@@ -232,6 +230,47 @@ class ComplaintGenerator(nn.Module):
         condition_data = self.conditions.get(presentation.condition_code, {})
         condition_name = condition_data.get("name", "respiratory condition")
 
+        profile = presentation.demographics
+        history = presentation.history_profile
+
+        demographic_summary = profile.summary()
+        if profile.social_history or profile.risk_factors:
+            extras = profile.social_history + profile.risk_factors
+            if extras:
+                demographic_summary = f"{demographic_summary} ({', '.join(extras)})"
+
+        history_lines = []
+        if history.past_conditions:
+            history_lines.append(
+                "Past conditions: " + ", ".join(history.past_conditions[:3])
+            )
+        if history.medications:
+            history_lines.append(
+                "Medications: " + ", ".join(history.medications[:3])
+            )
+        if history.allergies:
+            history_lines.append(
+                "Allergies: " + ", ".join(history.allergies[:2])
+            )
+        if history.last_meal:
+            history_lines.append(f"Last meal: {history.last_meal}")
+        if history.recent_events:
+            history_lines.append(
+                "Recent events: " + ", ".join(history.recent_events[:2])
+            )
+        if history.family_history:
+            history_lines.append(
+                "Family history: " + ", ".join(history.family_history[:2])
+            )
+        if history.lifestyle:
+            history_lines.append(
+                "Lifestyle: " + ", ".join(history.lifestyle[:2])
+            )
+        if history.supports:
+            history_lines.append(
+                "Supports: " + ", ".join(history.supports[:2])
+            )
+
         # Format symptoms as natural language
         max_terms = presentation.vocabulary_profile.max_terms_per_response
         phrase_symptoms = [
@@ -242,7 +281,9 @@ class ComplaintGenerator(nn.Module):
 
         prompt = f"""[INST] You are helping generate realistic patient complaints for medical triage training.
 
-Patient has {condition_name} with symptoms: {symptom_list}
+Patient profile: {demographic_summary if demographic_summary else 'unspecified demographics'}
+Relevant history: {'; '.join(history_lines) if history_lines else 'No significant history provided'}
+Confirmed symptoms: {symptom_list}
 
 Generate a natural, realistic patient complaint as if the patient is describing their symptoms to a doctor. Keep it:
 - Brief (1-3 sentences)
@@ -250,6 +291,7 @@ Generate a natural, realistic patient complaint as if the patient is describing 
 - Using everyday language (not medical jargon)
 - Expressing concern or discomfort
 - Natural and conversational
+- Consistent with the demographic and history details above
 
 Patient complaint: [/INST]"""
         
@@ -268,11 +310,8 @@ Patient complaint: [/INST]"""
         Raises:
             RuntimeError: If LLM generation fails
         """
-        if self.model is None:
-            raise RuntimeError(
-                "Model not loaded. Ensure ComplaintGenerator was initialized with use_pretrained=True "
-                "and model loaded successfully."
-            )
+        if self.model is None or self.template_mode:
+            return self._generate_template_complaint(presentation)
 
         try:
             prompt = self._create_prompt(presentation)
@@ -318,6 +357,26 @@ Patient complaint: [/INST]"""
                 f"Ensure model is properly loaded and device has sufficient memory."
             ) from e
 
+    def _generate_template_complaint(self, presentation: PatientPresentation) -> str:
+        """Deterministic fallback complaint when no language model is available."""
+
+        profile = presentation.demographics
+        history = presentation.history_profile
+        symptom_phrases = [
+            self._format_symptom(presentation, symptom, form="phrase")
+            for symptom in presentation.symptoms[: presentation.vocabulary_profile.max_terms_per_response]
+        ]
+        symptoms_text = ", ".join(symptom_phrases)
+        intro = profile.summary() or "I"
+        if history.recent_events:
+            trigger = history.recent_events[0]
+            complaint = (
+                f"{intro} started feeling unwell after {trigger} and now I'm dealing with {symptoms_text}."
+            )
+        else:
+            complaint = f"{intro} have been struggling with {symptoms_text} and it's worrying me."
+        return complaint
+
     def _format_symptom(
         self, presentation: PatientPresentation, symptom: str, form: str
     ) -> str:
@@ -359,6 +418,8 @@ Patient complaint: [/INST]"""
                     symptom_probabilities=probabilities,
                     misdescription_weights=weights,
                     vocabulary_profile=vocab,
+                    demographics=PatientDemographics(),
+                    history_profile=PatientHistory(),
                 )
             else:
                 presentation = self.symptom_generator.generate_symptoms(
@@ -543,41 +604,89 @@ Patient complaint: [/INST]"""
                 continue
             selected.append(symptom)
 
-        if not selected:
-            response = "I'm mostly feeling generally unwell, nothing specific to add."
-        else:
-            phrases = [
-                self._format_symptom(presentation, symptom, form="phrase")
-                for symptom in selected
-            ]
-            lowered_prompt = prompt.lower()
+        history = presentation.history_profile
+        demographics = presentation.demographics
+        lowered_prompt = prompt.lower()
 
-            if "how long" in lowered_prompt or "when" in lowered_prompt:
-                duration = random.choice(self.time_terms)
-                response = (
-                    f"It's been going on for {duration}, and I'm still dealing with "
-                    f"{' and '.join(phrases)}."
-                )
-            elif "severity" in lowered_prompt or "bad" in lowered_prompt:
-                severity = random.choice(self.severity_terms)
-                response = (
-                    f"It feels {severity}. I'm especially bothered by "
-                    f"{' and '.join(phrases)}."
-                )
-            elif strategy == "brief":
-                response = f"Mostly just {' and '.join(phrases)}."
-            elif strategy == "detailed":
-                severity = random.choice(self.severity_terms)
-                duration = random.choice(self.time_terms)
-                response = (
-                    f"I've been dealing with {' and '.join(phrases)} for {duration}, "
-                    f"and it's felt {severity} the whole time."
-                )
+        if any(keyword in lowered_prompt for keyword in ("how old", "age")):
+            response = f"I'm {demographics.age} years old."
+        elif any(keyword in lowered_prompt for keyword in ("sex", "gender")):
+            response = f"I'm {demographics.sex}."
+        elif "occupation" in lowered_prompt or "work" in lowered_prompt:
+            if demographics.occupation:
+                response = f"I work as {demographics.occupation}."
             else:
-                feeling = random.choice(self.feeling_terms)
-                response = (
-                    f"I'm feeling {feeling} because of {' and '.join(phrases)}."
-                )
+                response = "I'm not currently working."
+        elif "medication" in lowered_prompt:
+            if history.medications:
+                response = "I'm taking " + ", ".join(history.medications)
+            else:
+                response = "I'm not on any regular medications."
+        elif "allerg" in lowered_prompt:
+            if history.allergies:
+                response = "I'm allergic to " + ", ".join(history.allergies)
+            else:
+                response = "I don't have any known allergies."
+        elif "last meal" in lowered_prompt or "eat" in lowered_prompt:
+            if history.last_meal:
+                response = f"I last ate {history.last_meal}."
+            else:
+                response = "I can't remember when I last ate."
+        elif "history" in lowered_prompt or "past condition" in lowered_prompt:
+            if history.past_conditions:
+                response = "I've had " + ", ".join(history.past_conditions)
+            else:
+                response = "I don't have other medical conditions."
+        elif "family" in lowered_prompt:
+            if history.family_history:
+                response = "My family has " + ", ".join(history.family_history)
+            else:
+                response = "No significant family history that I know of."
+        elif "support" in lowered_prompt or "help" in lowered_prompt:
+            if history.supports:
+                response = "We're using " + ", ".join(history.supports) + " to cope."
+            else:
+                response = "I haven't needed extra support yet."
+        elif "event" in lowered_prompt or "what happened" in lowered_prompt:
+            if history.recent_events:
+                response = "It started after " + ", ".join(history.recent_events)
+            else:
+                response = "Nothing unusual happened before this."
+        else:
+            if not selected:
+                response = "I'm mostly feeling generally unwell, nothing specific to add."
+            else:
+                phrases = [
+                    self._format_symptom(presentation, symptom, form="phrase")
+                    for symptom in selected
+                ]
+
+                if "how long" in lowered_prompt or "when" in lowered_prompt:
+                    duration = random.choice(self.time_terms)
+                    response = (
+                        f"It's been going on for {duration}, and I'm still dealing with "
+                        f"{' and '.join(phrases)}."
+                    )
+                elif "severity" in lowered_prompt or "bad" in lowered_prompt:
+                    severity = random.choice(self.severity_terms)
+                    response = (
+                        f"It feels {severity}. I'm especially bothered by "
+                        f"{' and '.join(phrases)}."
+                    )
+                elif strategy == "brief":
+                    response = f"Mostly just {' and '.join(phrases)}."
+                elif strategy == "detailed":
+                    severity = random.choice(self.severity_terms)
+                    duration = random.choice(self.time_terms)
+                    response = (
+                        f"I've been dealing with {' and '.join(phrases)} for {duration}, "
+                        f"and it's felt {severity} the whole time."
+                    )
+                else:
+                    feeling = random.choice(self.feeling_terms)
+                    response = (
+                        f"I'm feeling {feeling} because of {' and '.join(phrases)}."
+                    )
 
         presentation.record_response(
             prompt,

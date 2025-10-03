@@ -8,7 +8,7 @@ import random
 import threading
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import yaml
 
@@ -32,6 +32,32 @@ class RespiratoryConditions:
     _reload_hooks: List[Callable[[Dict[str, Dict]], None]] = []
 
     REQUIRED_FIELDS = {"name", "symptoms", "severity_indicators", "lay_terms"}
+
+    _DEMOGRAPHIC_KEYS = {
+        "age_ranges",
+        "sexes",
+        "ethnicities",
+        "occupations",
+        "social_history",
+        "lifestyle",
+        "risk_factors",
+        "exposures",
+        "regions",
+        "notes",
+    }
+
+    _HISTORY_KEYS = {
+        "past_conditions",
+        "medications",
+        "allergies",
+        "immunizations",
+        "family_history",
+        "lifestyle",
+        "recent_events",
+        "exposures",
+        "last_meal",
+        "supports",
+    }
 
     @classmethod
     def get_config_path(cls) -> Path:
@@ -139,6 +165,22 @@ class RespiratoryConditions:
                     condition["description"], f"{code}.description"
                 )
 
+            if "demographics" in condition:
+                validated_condition["demographics"] = cls._validate_demographics(
+                    condition["demographics"],
+                    f"{code}.demographics",
+                )
+            else:
+                validated_condition["demographics"] = cls._default_demographics()
+
+            if "history" in condition:
+                validated_condition["history"] = cls._validate_history(
+                    condition["history"],
+                    f"{code}.history",
+                )
+            else:
+                validated_condition["history"] = cls._default_history()
+
             validated[code] = validated_condition
 
         if not validated:
@@ -164,6 +206,94 @@ class RespiratoryConditions:
         if not result:
             raise ValueError(f"{location} must contain at least one entry")
         return result
+
+    @staticmethod
+    def _default_demographics() -> Dict[str, Dict[str, Any]]:
+        return {"inclusion": {}, "exclusion": {}}
+
+    @staticmethod
+    def _default_history() -> Dict[str, Dict[str, Any]]:
+        return {"inclusion": {}, "exclusion": {}}
+
+    @classmethod
+    def _validate_age_ranges(cls, value: object, location: str) -> List[Dict[str, Any]]:
+        if not isinstance(value, Iterable) or isinstance(value, (str, bytes)):
+            raise ValueError(f"{location} must be a list of mappings")
+        ranges: List[Dict[str, Any]] = []
+        for entry in value:
+            if not isinstance(entry, Mapping):
+                raise ValueError(f"{location} entries must be mappings with min/max")
+            if "min" not in entry and "max" not in entry:
+                raise ValueError(f"{location} entries require at least 'min' or 'max'")
+            minimum = entry.get("min", 0)
+            maximum = entry.get("max", minimum)
+            weight = entry.get("weight", 1.0)
+            if not isinstance(minimum, (int, float)) or not isinstance(maximum, (int, float)):
+                raise ValueError(f"{location} min/max must be numeric")
+            if not isinstance(weight, (int, float)) or weight <= 0:
+                raise ValueError(f"{location} weight must be a positive number")
+            ranges.append({"min": float(minimum), "max": float(maximum), "weight": float(weight)})
+        return ranges
+
+    @classmethod
+    def _validate_criteria_block(
+        cls,
+        value: object,
+        location: str,
+        *,
+        allowed_keys: set,
+        include_age_ranges: bool = False,
+    ) -> Dict[str, Any]:
+        if value is None:
+            return {}
+        if not isinstance(value, Mapping):
+            raise ValueError(f"{location} must be a mapping")
+        validated: Dict[str, Any] = {}
+        for key, raw in value.items():
+            if key not in allowed_keys:
+                raise ValueError(
+                    f"{location} contains unsupported key '{key}'. "
+                    f"Allowed keys: {sorted(allowed_keys)}"
+                )
+            if key == "age_ranges" and include_age_ranges:
+                validated[key] = cls._validate_age_ranges(raw, f"{location}.age_ranges")
+            else:
+                validated[key] = cls._validate_str_list(raw, f"{location}.{key}")
+        return validated
+
+    @classmethod
+    def _validate_demographics(cls, value: object, location: str) -> Dict[str, Dict[str, Any]]:
+        if value is None:
+            return cls._default_demographics()
+        if not isinstance(value, Mapping):
+            raise ValueError(f"{location} must be a mapping with inclusion/exclusion keys")
+        demographics: Dict[str, Dict[str, Any]] = {}
+        for key in ("inclusion", "exclusion"):
+            block = value.get(key)
+            demographics[key] = cls._validate_criteria_block(
+                block or {},
+                f"{location}.{key}",
+                allowed_keys=cls._DEMOGRAPHIC_KEYS,
+                include_age_ranges=True,
+            )
+        return demographics
+
+    @classmethod
+    def _validate_history(cls, value: object, location: str) -> Dict[str, Dict[str, Any]]:
+        if value is None:
+            return cls._default_history()
+        if not isinstance(value, Mapping):
+            raise ValueError(f"{location} must be a mapping with inclusion/exclusion keys")
+        history: Dict[str, Dict[str, Any]] = {}
+        for key in ("inclusion", "exclusion"):
+            block = value.get(key)
+            history[key] = cls._validate_criteria_block(
+                block or {},
+                f"{location}.{key}",
+                allowed_keys=cls._HISTORY_KEYS,
+                include_age_ranges=False,
+            )
+        return history
 
     @classmethod
     def reload(cls, *, config_path: Optional[Path] = None) -> Dict[str, Dict]:
@@ -283,12 +413,22 @@ class RespiratoryConditions:
         severity: List[str] = []
         lay_terms: List[str] = []
         condition_names: List[str] = []
+        demographic_terms: List[str] = []
+        history_terms: List[str] = []
 
         for data in source.values():
             symptoms.extend(data.get("symptoms", []))
             severity.extend(data.get("severity_indicators", []))
             lay_terms.extend(data.get("lay_terms", []))
             condition_names.append(data.get("name", ""))
+
+            demographics = data.get("demographics", {})
+            history = data.get("history", {})
+
+            for block in demographics.values():
+                demographic_terms.extend(cls._flatten_demographic_terms(block))
+            for block in history.values():
+                history_terms.extend(cls._flatten_history_terms(block))
 
         # Deduplicate while preserving order
         def _unique(values: Iterable[str]) -> List[str]:
@@ -305,4 +445,30 @@ class RespiratoryConditions:
             "severity_indicators": _unique(severity),
             "lay_terms": _unique(lay_terms),
             "condition_names": _unique(condition_names),
+            "demographics": _unique(demographic_terms),
+            "history": _unique(history_terms),
         }
+
+    @staticmethod
+    def _flatten_demographic_terms(block: Mapping) -> List[str]:
+        terms: List[str] = []
+        for key, value in block.items():
+            if key == "age_ranges":
+                for entry in value:
+                    minimum = int(entry.get("min", 0))
+                    maximum = int(entry.get("max", minimum))
+                    if minimum == maximum:
+                        terms.append(f"age_{minimum}")
+                    else:
+                        terms.append(f"age_{minimum}_to_{maximum}")
+            elif isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
+                terms.extend(str(item) for item in value if str(item).strip())
+        return terms
+
+    @staticmethod
+    def _flatten_history_terms(block: Mapping) -> List[str]:
+        terms: List[str] = []
+        for value in block.values():
+            if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
+                terms.extend(str(item) for item in value if str(item).strip())
+        return terms

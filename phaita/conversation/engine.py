@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Deque, Iterable, List, Optional, Sequence, Set
+from typing import Any, Deque, Dict, Iterable, List, Optional, Sequence, Set
 
 from ..triage.question_strategy import ExpectedInformationGainStrategy
 
@@ -56,6 +56,8 @@ class ConversationEngine:
         self._info_gain_history: List[float] = []
         self._current_differential: Sequence[dict] = []
         self.last_info_gain_gradient: Optional[float] = None
+        self.demographics_context: Optional[Dict[str, Any]] = None
+        self.history_context: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------
     # Symptom tracking helpers
@@ -78,6 +80,17 @@ class ConversationEngine:
         """Return gathered symptoms in the order they were discovered."""
 
         return list(self._symptom_order)
+
+    def set_patient_context(
+        self,
+        *,
+        demographics: Optional[Dict[str, Any]] = None,
+        history: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Store demographic and history context for downstream question generation."""
+
+        self.demographics_context = demographics
+        self.history_context = history
 
     # ------------------------------------------------------------------
     # Conversation flow
@@ -111,6 +124,8 @@ class ConversationEngine:
                     previous_answers=previous_answers,
                     previous_questions=previous_questions,
                     conversation_history=history,
+                    demographics=self.demographics_context,
+                    history=self.history_context,
                     num_candidates=self.candidate_pool_size,
                 )
             else:
@@ -119,6 +134,8 @@ class ConversationEngine:
                     previous_answers=previous_answers,
                     previous_questions=previous_questions,
                     conversation_history=history,
+                    demographics=self.demographics_context,
+                    history=self.history_context,
                 )
                 candidates = [candidate] if candidate else []
 

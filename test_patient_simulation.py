@@ -2,7 +2,10 @@ import random
 
 import pytest
 
-from phaita.generation.patient_agent import PatientSimulator, VocabularyProfile
+from phaita.generation.patient_agent import (
+    PatientSimulator,
+    VocabularyProfile,
+)
 from phaita.models.generator import ComplaintGenerator, SymptomGenerator
 
 
@@ -14,6 +17,11 @@ def test_patient_presentation_metadata_consistency():
     assert presentation.symptoms, "Expected sampled symptoms"
     assert presentation.symptom_probabilities
     assert presentation.misdescription_weights
+    assert presentation.demographics.age > 0
+    assert presentation.demographics.sex
+    assert presentation.history_profile is not None
+    assert presentation.demographic_criteria
+    assert presentation.history_criteria
 
     for symptom, probability in presentation.symptom_probabilities.items():
         assert 0.0 <= probability <= 1.0
@@ -50,3 +58,8 @@ def test_complaint_generator_follow_up_respects_vocabulary():
     for symptom in presentation.symptoms:
         if "_" in symptom:
             assert symptom not in response
+
+    medication_response = complaint_generator.answer_question(
+        "What medications are you taking right now?"
+    )
+    assert "Rescue inhaler" in medication_response or "not on any" in medication_response
