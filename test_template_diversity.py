@@ -163,6 +163,13 @@ def test_no_grammar_errors():
         (r'\s+[,.]', "Space before punctuation"),
         (r'^\s+', "Leading whitespace"),
         (r'\s+$', "Trailing whitespace"),
+        # Additional grammar checks
+        (r'\ba\s+[aeiou]', "Should use 'an' before vowel"),
+        (r'\ban\s+[^aeiou]', "Should use 'a' before consonant"),
+        (r'\bI\s+has\b', "Subject-verb disagreement (I has)"),
+        (r'\bI\s+have\s+been\s+[a-z]+ed\b', "Redundant passive (I have been verbed)"),
+        (r'\.[a-z]', "Missing capital after period"),
+        (r'\?\s*[a-z]', "Missing capital after question mark"),
     ]
     
     for i in range(100):
