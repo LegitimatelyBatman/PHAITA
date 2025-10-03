@@ -28,22 +28,15 @@ from phaita.conversation import ConversationEngine
 from phaita.models.question_generator import QuestionGenerator
 from phaita.triage import format_differential_report
 from phaita.triage.info_sheet import format_info_sheet
-# from phaita.models import SymptomGenerator, ComplaintGenerator, DiagnosisDiscriminator
 try:
     from phaita.models.enhanced_bayesian_network import create_enhanced_bayesian_network
     from phaita.data.forum_scraper import create_data_augmentation
     from phaita.utils.realism_scorer import create_realism_scorer
-except ImportError as e:
+except ImportError:
     # Handle missing dependencies gracefully
-    def create_enhanced_bayesian_network():
-        from phaita.models.enhanced_bayesian_network import create_enhanced_bayesian_network
-        return create_enhanced_bayesian_network()
-    
-    def create_data_augmentation():
-        return None
-    
-    def create_realism_scorer():
-        return None
+    create_enhanced_bayesian_network = None
+    create_data_augmentation = None
+    create_realism_scorer = None
 
 
 _QUESTION_GENERATOR_FALLBACK_WARNED = False
@@ -687,7 +680,7 @@ def challenge_command(args):
                 predicted_condition = "UNKNOWN"
                 confidence = 0.0
 
-            is_correct = _is_diagnosis_correct(case["condition"], predicted_condition)
+            is_correct = (case["condition"] == predicted_condition)
 
             evaluated_cases.append({
                 **case,
@@ -799,11 +792,6 @@ def _generate_complaint_from_symptoms(symptoms: list, metadata: dict) -> str:
     )
     
     return complaint
-
-
-def _is_diagnosis_correct(true_condition: str, predicted_condition: str) -> bool:
-    """Check if diagnosis is correct (simplified)."""
-    return true_condition == predicted_condition
 
 
 def main():

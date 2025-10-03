@@ -89,33 +89,26 @@ Complete guide to all PHAITA documentation.
 
 ### Graph Neural Networks
 
-#### [docs/features/GNN_QUICK_REFERENCE.md](features/GNN_QUICK_REFERENCE.md)
-**GNN module quick guide** - Fast reference for symptom graph features.
-- SymptomGraphBuilder usage
-- SymptomGraphModule API
-- Performance tips
-- Example code snippets
-
-#### [docs/features/GNN_OPTIMIZATION_RESULTS.md](features/GNN_OPTIMIZATION_RESULTS.md)
-**GNN performance benchmarks** - Optimization results and comparisons.
-- Performance metrics
-- Memory usage
-- Speed improvements
-- Benchmark results
+#### [docs/features/GNN_OPTIMIZATION_GUIDE.md](features/GNN_OPTIMIZATION_GUIDE.md)
+**GNN optimization complete guide** - Comprehensive guide to GNN performance and usage.
+- Quick start and usage examples
+- Performance benchmarks (29.6% speedup achieved)
+- Key optimizations (cached buffers, torch.compile)
+- Profiling results and bottleneck analysis
+- Memory efficiency metrics
+- Platform-specific performance expectations
+- Testing and validation
+- Troubleshooting guide
 
 #### [docs/features/CAUSAL_EDGES_GUIDE.md](features/CAUSAL_EDGES_GUIDE.md)
 **Causal relationships in symptom graphs** - Complete guide to causal edge implementation.
-- Causal edge types
+- Implementation overview and statistics
+- Causal edge types (co-occurrence, causal, temporal)
 - Configuration (config/symptom_causality.yaml)
-- Usage examples
+- Usage examples and integration
 - Clinical rationale for relationships
-
-#### [docs/features/CAUSAL_EDGES_SUMMARY.md](features/CAUSAL_EDGES_SUMMARY.md)
-**Causal edges implementation summary** - What was implemented and key results.
-- Implementation overview
-- Graph statistics
 - Testing status (6/6 tests pass)
-- Files changed
+- Files changed and implementation details
 
 ### Advanced Features
 
@@ -268,10 +261,8 @@ Complete guide to all PHAITA documentation.
 
 #### Feature Documentation (docs/features/)
 - docs/features/MODEL_LOADER_GUIDE.md
-- docs/features/GNN_QUICK_REFERENCE.md
-- docs/features/GNN_OPTIMIZATION_RESULTS.md
+- docs/features/GNN_OPTIMIZATION_GUIDE.md
 - docs/features/CAUSAL_EDGES_GUIDE.md
-- docs/features/CAUSAL_EDGES_SUMMARY.md
 - docs/features/TEMPORAL_MODELING_README.md
 - docs/features/COMORBIDITY_IMPLEMENTATION.md
 - docs/features/IMPLEMENTATION_CHECKLIST.md
