@@ -31,3 +31,20 @@ def test_predict_diagnosis_honours_top_k_and_guidance():
 
     report = format_differential_report(ranked)
     assert "Red flags" in report
+
+
+def test_predict_with_explanation_returns_matched_keywords():
+    model = DiagnosisDiscriminator(use_pretrained=False)
+
+    complaint = "I have a cough, fever, and my chest hurts when I breathe."
+
+    code, confidence, explanation = model.predict_with_explanation(complaint)
+
+    assert code in model.condition_codes
+    assert 0.0 <= confidence <= 1.0
+
+    matched_keywords = explanation.get("matched_keywords")
+    assert isinstance(matched_keywords, list)
+    assert matched_keywords, "Expected at least one matched keyword in explanation"
+    for keyword in matched_keywords:
+        assert keyword in complaint.lower()
