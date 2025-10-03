@@ -102,9 +102,16 @@ class DialogueEngine:
                 self.temporal_module = None
     
     def _normalize_probabilities(self) -> None:
-        """Normalize probabilities to sum to 1.0."""
+        """Normalize probabilities to sum to 1.0 with numerical stability."""
         total = sum(self.state.differential_probabilities.values())
-        if total > 0:
+        
+        # Handle numerical underflow
+        if total < 1e-10:
+            # Reset to uniform distribution
+            n = len(self.state.differential_probabilities)
+            for code in self.state.differential_probabilities:
+                self.state.differential_probabilities[code] = 1.0 / n
+        elif total > 0:
             for code in self.state.differential_probabilities:
                 self.state.differential_probabilities[code] /= total
     
@@ -168,6 +175,10 @@ class DialogueEngine:
             # If symptom is absent, use complement probability
             if not present:
                 likelihood = 1.0 - likelihood
+            
+            # Prevent numerical underflow/overflow
+            likelihood = max(likelihood, 0.001)  # Minimum 0.1% probability
+            likelihood = min(likelihood, 0.999)  # Maximum 99.9% probability
             
             # Bayesian update: posterior ∝ likelihood × prior
             prior = self.state.differential_probabilities[condition_code]
