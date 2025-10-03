@@ -28,11 +28,11 @@ except ImportError as e:
 
 try:
     from .gnn_module import SymptomGraphModule
-except ImportError as e:
-    raise ImportError(
-        "GNN module is required for DiagnosisDiscriminator. "
-        "Ensure torch-geometric==2.6.1 is properly installed."
-    ) from e
+    HAS_GNN = True
+except ImportError:
+    HAS_GNN = False
+    # GNN is optional - will use MLP fallback
+    SymptomGraphModule = None
 
 
 class DiagnosisDiscriminator(nn.Module):
