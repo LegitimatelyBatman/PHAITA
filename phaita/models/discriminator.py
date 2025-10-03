@@ -7,7 +7,7 @@ Requires transformers and torch-geometric to be properly installed.
 
 import math
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
 import torch.nn as nn
@@ -80,6 +80,9 @@ class DiagnosisDiscriminator(nn.Module):
         self.conditions = RespiratoryConditions.get_all_conditions()
         self.num_conditions = len(self.conditions)
         self.condition_codes = list(self.conditions.keys())
+        self.keyword_index = self._build_keyword_index(self.conditions)
+
+        RespiratoryConditions.register_reload_hook(self.reload_conditions)
         
         # Initialize text encoder (DeBERTa)
         try:
@@ -143,6 +146,53 @@ class DiagnosisDiscriminator(nn.Module):
         )
         
         self.dropout = nn.Dropout(dropout)
+
+    @staticmethod
+    def _generate_keyword_variants(term: str) -> List[str]:
+        """Generate normalized keyword variants for matching free-text complaints."""
+
+        normalized = term.strip().lower()
+        if not normalized:
+            return []
+
+        variants = [normalized]
+        underscored = normalized.replace("_", " ")
+        if underscored != normalized:
+            variants.append(underscored)
+        return variants
+
+    def _build_keyword_index(self, conditions: Optional[Dict[str, Dict]] = None) -> Dict[str, List[str]]:
+        """Construct lookup of canonical keywords for quick explanation matches."""
+
+        if conditions is None:
+            conditions = self.conditions
+
+        keyword_index: Dict[str, List[str]] = {}
+        for code, data in conditions.items():
+            seen: Set[str] = set()
+            keywords: List[str] = []
+
+            for field in ("symptoms", "severity_indicators", "lay_terms"):
+                for term in data.get(field, []):
+                    for variant in self._generate_keyword_variants(term):
+                        if variant not in seen:
+                            seen.add(variant)
+                            keywords.append(variant)
+
+            keyword_index[code] = keywords
+
+        return keyword_index
+
+    def reload_conditions(self, conditions: Optional[Dict[str, Dict]] = None) -> None:
+        """Reload respiratory conditions and rebuild keyword index."""
+
+        if conditions is None:
+            conditions = RespiratoryConditions.get_all_conditions()
+
+        self.conditions = conditions
+        self.condition_codes = list(self.conditions.keys())
+        self.num_conditions = len(self.conditions)
+        self.keyword_index = self._build_keyword_index(self.conditions)
             
     def encode_text(self, complaints: List[str]) -> torch.Tensor:
         """
@@ -461,6 +511,8 @@ class DiagnosisDiscriminator(nn.Module):
         # Extract custom fields
         if "keyword_index" in state_dict:
             self.keyword_index = state_dict.pop("keyword_index")
+        else:
+            self.keyword_index = self._build_keyword_index()
         if "condition_codes" in state_dict:
             self.condition_codes = state_dict.pop("condition_codes")
         
