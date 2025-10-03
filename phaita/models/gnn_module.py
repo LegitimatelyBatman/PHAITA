@@ -15,6 +15,8 @@ import torch.nn.functional as F
 from typing import Dict, List, Tuple, Optional
 import networkx as nx
 import sys
+import yaml
+from pathlib import Path
 
 # Enforce required dependencies
 try:
@@ -31,19 +33,40 @@ except ImportError as e:
 class SymptomGraphBuilder:
     """
     Builds symptom relationship graphs from ICD-10 conditions.
+    Supports causal and temporal edges in addition to co-occurrence.
     """
     
-    def __init__(self, conditions: Dict):
+    def __init__(self, conditions: Dict, causality_config_path: Optional[str] = None):
         """
         Initialize graph builder.
         
         Args:
             conditions: Dictionary of ICD-10 conditions with symptoms
+            causality_config_path: Optional path to causality config YAML
         """
         self.conditions = conditions
         self.symptom_to_idx = {}
         self.idx_to_symptom = {}
         self._build_symptom_vocabulary()
+        
+        # Load causality config if provided
+        self.causality_config = None
+        if causality_config_path:
+            self._load_causality_config(causality_config_path)
+        else:
+            # Try to load from default location
+            default_path = Path(__file__).resolve().parents[2] / "config" / "symptom_causality.yaml"
+            if default_path.exists():
+                self._load_causality_config(str(default_path))
+    
+    def _load_causality_config(self, config_path: str):
+        """Load causality configuration from YAML file."""
+        try:
+            with open(config_path, 'r') as f:
+                self.causality_config = yaml.safe_load(f)
+        except Exception as e:
+            import warnings
+            warnings.warn(f"Failed to load causality config from {config_path}: {e}", RuntimeWarning)
         
     def _build_symptom_vocabulary(self):
         """Build a vocabulary of all unique symptoms."""
@@ -104,6 +127,118 @@ class SymptomGraphBuilder:
     def get_num_nodes(self) -> int:
         """Get number of nodes in the graph."""
         return len(self.symptom_to_idx)
+    
+    def build_causal_graph(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Build graph with causal and temporal edges from causality config.
+        
+        Returns:
+            edge_index: [2, num_edges] tensor of edge connections
+            edge_weight: [num_edges] tensor of edge weights
+            edge_attr: [num_edges, 3] tensor of edge features [type, strength, delay]
+        """
+        if not self.causality_config:
+            # Fall back to co-occurrence graph with default edge attributes
+            edge_index, edge_weight = self.build_cooccurrence_graph()
+            # Create edge attributes: [edge_type=0 (co-occurrence), strength=weight, delay=0]
+            num_edges = edge_index.shape[1]
+            edge_attr = torch.zeros(num_edges, 3)
+            edge_attr[:, 0] = 0  # co-occurrence type
+            edge_attr[:, 1] = edge_weight  # strength from weight
+            edge_attr[:, 2] = 0  # no delay
+            return edge_index, edge_weight, edge_attr
+        
+        # Get edge type IDs from config
+        edge_types = self.causality_config.get('edge_types', {
+            'co_occurrence': 0,
+            'causal': 1,
+            'temporal': 2
+        })
+        
+        # Get edge weights config
+        edge_weights_config = self.causality_config.get('edge_weights', {
+            'co_occurrence_weight': 0.4,
+            'causal_weight': 1.0,
+            'temporal_weight': 0.6,
+            'reverse_causal_factor': 0.3
+        })
+        
+        # Start with co-occurrence edges
+        edge_list = []
+        edge_weight_list = []
+        edge_attr_list = []
+        
+        # Build co-occurrence edges
+        cooccur_edge_index, cooccur_edge_weight = self.build_cooccurrence_graph()
+        if cooccur_edge_index.shape[1] > 0:
+            for i in range(cooccur_edge_index.shape[1]):
+                src, tgt = cooccur_edge_index[0, i].item(), cooccur_edge_index[1, i].item()
+                weight = cooccur_edge_weight[i].item() * edge_weights_config['co_occurrence_weight']
+                edge_list.append([src, tgt])
+                edge_weight_list.append(weight)
+                edge_attr_list.append([edge_types['co_occurrence'], weight, 0.0])
+        
+        # Add causal edges
+        causal_edges = self.causality_config.get('causal_edges', [])
+        for edge in causal_edges:
+            source = edge['source']
+            target = edge['target']
+            strength = edge['strength']
+            
+            # Check if symptoms exist in vocabulary
+            if source not in self.symptom_to_idx or target not in self.symptom_to_idx:
+                continue
+            
+            src_idx = self.symptom_to_idx[source]
+            tgt_idx = self.symptom_to_idx[target]
+            
+            # Forward edge (source -> target)
+            forward_weight = strength * edge_weights_config['causal_weight']
+            edge_list.append([src_idx, tgt_idx])
+            edge_weight_list.append(forward_weight)
+            edge_attr_list.append([edge_types['causal'], strength, 0.0])
+            
+            # Reverse edge (target -> source) with reduced weight
+            reverse_weight = strength * edge_weights_config['causal_weight'] * edge_weights_config['reverse_causal_factor']
+            edge_list.append([tgt_idx, src_idx])
+            edge_weight_list.append(reverse_weight)
+            edge_attr_list.append([edge_types['causal'], strength * edge_weights_config['reverse_causal_factor'], 0.0])
+        
+        # Add temporal edges
+        temporal_edges = self.causality_config.get('temporal_edges', [])
+        for edge in temporal_edges:
+            earlier = edge['earlier']
+            later = edge['later']
+            delay = edge.get('typical_delay_hours', 0)
+            strength = edge.get('strength', 0.5)
+            
+            # Check if symptoms exist in vocabulary
+            if earlier not in self.symptom_to_idx or later not in self.symptom_to_idx:
+                continue
+            
+            earlier_idx = self.symptom_to_idx[earlier]
+            later_idx = self.symptom_to_idx[later]
+            
+            # Temporal edge (earlier -> later)
+            temporal_weight = strength * edge_weights_config['temporal_weight']
+            edge_list.append([earlier_idx, later_idx])
+            edge_weight_list.append(temporal_weight)
+            # Normalize delay to [0, 1] range (assuming max 168 hours = 1 week)
+            normalized_delay = min(delay / 168.0, 1.0)
+            edge_attr_list.append([edge_types['temporal'], strength, normalized_delay])
+        
+        # Convert to tensors
+        if edge_list:
+            edge_index = torch.tensor(edge_list, dtype=torch.long).t()
+            edge_weight = torch.tensor(edge_weight_list, dtype=torch.float)
+            edge_attr = torch.tensor(edge_attr_list, dtype=torch.float)
+        else:
+            # Empty graph fallback
+            edge_index = torch.zeros((2, 0), dtype=torch.long)
+            edge_weight = torch.zeros(0, dtype=torch.float)
+            edge_attr = torch.zeros((0, 3), dtype=torch.float)
+        
+        return edge_index, edge_weight, edge_attr
 
 
 class GraphAttentionNetwork(nn.Module):
@@ -125,7 +260,8 @@ class GraphAttentionNetwork(nn.Module):
         output_dim: int = 256,
         num_heads: int = 4,
         num_layers: int = 2,
-        dropout: float = 0.1
+        dropout: float = 0.1,
+        edge_dim: Optional[int] = None
     ):
         """
         Initialize GAT.
@@ -138,12 +274,14 @@ class GraphAttentionNetwork(nn.Module):
             num_heads: Number of attention heads
             num_layers: Number of GAT layers
             dropout: Dropout rate
+            edge_dim: Dimension of edge features (None to disable edge features)
         """
         super().__init__()
         self.num_nodes = num_nodes
         self.node_feature_dim = node_feature_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
+        self.edge_dim = edge_dim
         
         # Node embeddings (learnable features for each symptom)
         self.node_embeddings = nn.Embedding(num_nodes, node_feature_dim)
@@ -153,24 +291,24 @@ class GraphAttentionNetwork(nn.Module):
         
         # First layer
         self.gat_layers.append(
-            GATConv(node_feature_dim, hidden_dim, heads=num_heads, dropout=dropout)
+            GATConv(node_feature_dim, hidden_dim, heads=num_heads, dropout=dropout, edge_dim=edge_dim)
         )
         
         # Middle layers
         for _ in range(num_layers - 2):
             self.gat_layers.append(
-                GATConv(hidden_dim * num_heads, hidden_dim, heads=num_heads, dropout=dropout)
+                GATConv(hidden_dim * num_heads, hidden_dim, heads=num_heads, dropout=dropout, edge_dim=edge_dim)
             )
         
         # Last layer (single head)
         if num_layers > 1:
             self.gat_layers.append(
-                GATConv(hidden_dim * num_heads, output_dim, heads=1, dropout=dropout)
+                GATConv(hidden_dim * num_heads, output_dim, heads=1, dropout=dropout, edge_dim=edge_dim)
             )
         else:
             # Single layer case
             self.gat_layers.append(
-                GATConv(node_feature_dim, output_dim, heads=1, dropout=dropout)
+                GATConv(node_feature_dim, output_dim, heads=1, dropout=dropout, edge_dim=edge_dim)
             )
         
         self.dropout = nn.Dropout(dropout)
@@ -182,7 +320,8 @@ class GraphAttentionNetwork(nn.Module):
         self, 
         edge_index: torch.Tensor, 
         edge_weight: Optional[torch.Tensor] = None,
-        batch_size: int = 1
+        batch_size: int = 1,
+        edge_attr: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """
         Internal forward pass implementation (can be compiled).
@@ -191,6 +330,7 @@ class GraphAttentionNetwork(nn.Module):
             edge_index: [2, num_edges] edge connections
             edge_weight: [num_edges] optional edge weights
             batch_size: Batch size for output
+            edge_attr: [num_edges, edge_dim] optional edge features
             
         Returns:
             Graph embeddings [batch_size, output_dim]
@@ -200,7 +340,11 @@ class GraphAttentionNetwork(nn.Module):
         
         # Apply GAT layers with vectorized operations
         for i, layer in enumerate(self.gat_layers):
-            x = layer(x, edge_index)
+            # Pass edge_attr if edge_dim is enabled
+            if self.edge_dim is not None and edge_attr is not None:
+                x = layer(x, edge_index, edge_attr=edge_attr)
+            else:
+                x = layer(x, edge_index)
             if i < len(self.gat_layers) - 1:
                 x = F.elu(x)
                 x = self.dropout(x)
@@ -220,7 +364,8 @@ class GraphAttentionNetwork(nn.Module):
         self, 
         edge_index: torch.Tensor, 
         edge_weight: Optional[torch.Tensor] = None,
-        batch_size: int = 1
+        batch_size: int = 1,
+        edge_attr: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """
         Forward pass through GAT.
@@ -229,11 +374,12 @@ class GraphAttentionNetwork(nn.Module):
             edge_index: [2, num_edges] edge connections
             edge_weight: [num_edges] optional edge weights
             batch_size: Batch size for output
+            edge_attr: [num_edges, edge_dim] optional edge features
             
         Returns:
             Graph embeddings [batch_size, output_dim]
         """
-        return self._forward_impl(edge_index, edge_weight, batch_size)
+        return self._forward_impl(edge_index, edge_weight, batch_size, edge_attr)
 
 
 class SymptomGraphModule(nn.Module):
@@ -255,7 +401,9 @@ class SymptomGraphModule(nn.Module):
         num_heads: int = 4,
         num_layers: int = 2,
         dropout: float = 0.1,
-        use_compile: bool = True
+        use_compile: bool = True,
+        use_causal_edges: bool = True,
+        causality_config_path: Optional[str] = None
     ):
         """
         Initialize symptom graph module.
@@ -269,17 +417,32 @@ class SymptomGraphModule(nn.Module):
             num_layers: Number of GAT layers
             dropout: Dropout rate
             use_compile: Whether to use torch.compile for optimization (PyTorch 2.0+)
+            use_causal_edges: Whether to use causal edges (default True)
+            causality_config_path: Optional path to causality config YAML
         """
         super().__init__()
         
         # Build graph structure
-        self.graph_builder = SymptomGraphBuilder(conditions)
-        edge_index, edge_weight = self.graph_builder.build_cooccurrence_graph()
+        self.graph_builder = SymptomGraphBuilder(conditions, causality_config_path)
+        self.use_causal_edges = use_causal_edges
+        
+        # Build graph with or without causal edges
+        if use_causal_edges and self.graph_builder.causality_config:
+            edge_index, edge_weight, edge_attr = self.graph_builder.build_causal_graph()
+            edge_dim = 3  # [edge_type, strength, temporal_delay]
+        else:
+            edge_index, edge_weight = self.graph_builder.build_cooccurrence_graph()
+            edge_attr = None
+            edge_dim = None
         
         # Register as buffers (not parameters, but part of state)
         # This ensures they move with the model to GPU/CPU
         self.register_buffer('edge_index', edge_index)
         self.register_buffer('edge_weight', edge_weight)
+        if edge_attr is not None:
+            self.register_buffer('edge_attr', edge_attr)
+        else:
+            self.register_buffer('edge_attr', torch.zeros((0, 3)))
         
         # Build GAT
         self.gat = GraphAttentionNetwork(
@@ -289,7 +452,8 @@ class SymptomGraphModule(nn.Module):
             output_dim=output_dim,
             num_heads=num_heads,
             num_layers=num_layers,
-            dropout=dropout
+            dropout=dropout,
+            edge_dim=edge_dim
         )
         
         # Apply torch.compile if available and requested (PyTorch 2.0+)
@@ -325,10 +489,11 @@ class SymptomGraphModule(nn.Module):
             Graph embeddings [batch_size, output_dim]
         """
         # Use compiled version if available, otherwise use regular forward
+        edge_attr = self.edge_attr if self.edge_attr.shape[0] > 0 else None
         if self._compiled_gat is not None:
-            return self._compiled_gat(self.edge_index, self.edge_weight, batch_size)
+            return self._compiled_gat(self.edge_index, self.edge_weight, batch_size, edge_attr)
         else:
-            return self.gat(self.edge_index, self.edge_weight, batch_size)
+            return self.gat(self.edge_index, self.edge_weight, batch_size, edge_attr)
     
     def get_symptom_indices(self, symptoms: List[str]) -> List[int]:
         """
