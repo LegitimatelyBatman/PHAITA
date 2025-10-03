@@ -115,6 +115,20 @@ class DialogueEngine:
             for code in self.state.differential_probabilities:
                 self.state.differential_probabilities[code] /= total
     
+    @staticmethod
+    def _normalize_symptom(symptom: str) -> str:
+        """Normalize symptom name for consistent matching.
+        
+        Converts: 'Severe_Respiratory-Distress' -> 'severe respiratory distress'
+        
+        Args:
+            symptom: Raw symptom name with any formatting
+            
+        Returns:
+            Normalized symptom name (lowercase, spaces only)
+        """
+        return symptom.lower().replace('_', ' ').replace('-', ' ').strip()
+    
     def _load_temporal_patterns(self) -> Dict[str, Dict]:
         """Load temporal progression patterns from YAML config.
         
@@ -153,7 +167,10 @@ class DialogueEngine:
             present: True if symptom is present, False if absent
             hours_since_onset: Optional hours since symptom first appeared
         """
-        # Track the evidence
+        # Normalize symptom name for consistent matching
+        normalized_symptom = self._normalize_symptom(symptom)
+        
+        # Track the evidence (use original symptom name for tracking)
         if present:
             self.state.confirmed_symptoms.add(symptom)
             self.state.denied_symptoms.discard(symptom)
@@ -167,9 +184,9 @@ class DialogueEngine:
         
         # Update probabilities for each condition using Bayes' rule
         for condition_code in self.state.differential_probabilities:
-            # Get the likelihood: P(symptom | condition)
+            # Get the likelihood: P(symptom | condition) - use normalized symptom
             likelihood = self.bayesian_network.get_symptom_probability(
-                condition_code, symptom
+                condition_code, normalized_symptom
             )
             
             # If symptom is absent, use complement probability

@@ -96,14 +96,23 @@ class BayesianSymptomNetwork:
         Returns:
             Probability (0.0 to 1.0)
         """
+        # Normalize symptom for consistent matching
+        symptom = symptom.lower().replace('_', ' ').replace('-', ' ').strip()
+        
         if condition_code not in self.conditions:
             return 0.0
         
         condition_data = self.conditions[condition_code]
         
-        if symptom in condition_data["symptoms"]:
+        # Normalize condition symptoms for comparison
+        normalized_primary = [s.lower().replace('_', ' ').replace('-', ' ').strip() 
+                             for s in condition_data["symptoms"]]
+        normalized_severity = [s.lower().replace('_', ' ').replace('-', ' ').strip() 
+                              for s in condition_data["severity_indicators"]]
+        
+        if symptom in normalized_primary:
             return self.primary_symptom_prob
-        elif symptom in condition_data["severity_indicators"]:
+        elif symptom in normalized_severity:
             return self.severity_symptom_prob
         else:
             return 0.0
