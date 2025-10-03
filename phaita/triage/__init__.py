@@ -4,6 +4,7 @@ from .diagnosis import (
     enrich_differential_with_guidance,
     format_differential_report,
 )
+from .diagnosis_orchestrator import DiagnosisOrchestrator, DiagnosisWithContext
 from .info_sheet import format_info_sheet
 from .question_strategy import ExpectedInformationGainStrategy
 
@@ -12,4 +13,6 @@ __all__ = [
     "format_differential_report",
     "format_info_sheet",
     "ExpectedInformationGainStrategy",
+    "DiagnosisOrchestrator",
+    "DiagnosisWithContext",
 ]
