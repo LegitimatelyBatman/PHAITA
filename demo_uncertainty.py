@@ -59,13 +59,19 @@ for pred in predictions[0]:
     print(f"Confidence: {pred['confidence_level']}")  # New field
     print()
 
-# Example 2: Direct uncertainty estimation
-mean_probs, std_probs = model.predict_with_uncertainty(
+# Example 2: Direct uncertainty estimation with structured output
+results = model.predict_with_uncertainty(
     complaints=["I have chest pain"],
-    num_samples=20
+    num_samples=20,
+    top_k=3
 )
-print(f"Mean probabilities shape: {mean_probs.shape}")
-print(f"Standard deviations shape: {std_probs.shape}")
+# Returns list of dictionaries with uncertainty info
+for pred in results[0]:
+    print(f"Condition: {pred['condition_name']}")
+    print(f"Probability: {pred['probability']:.3f}")
+    print(f"Uncertainty: {pred['uncertainty']:.3f}")
+    print(f"Confidence: {pred['confidence_level']}")
+    print()
 
 # Example 3: Disable MC dropout for faster inference
 predictions_fast = model.predict_diagnosis(

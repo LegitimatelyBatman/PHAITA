@@ -397,7 +397,7 @@ class DiagnosisDiscriminator(nn.Module):
 
         # Get predictions with or without MC dropout
         if use_mc_dropout:
-            mean_probs, std_probs = self.predict_with_uncertainty(complaints, num_mc_samples)
+            mean_probs, std_probs = self._mc_dropout_sample(complaints, num_mc_samples)
             # Calculate entropy for epistemic uncertainty
             entropy_scores = self._calculate_entropy(mean_probs)
         else:
@@ -507,16 +507,19 @@ class DiagnosisDiscriminator(nn.Module):
         entropy = -torch.sum(probabilities * log_probs, dim=1)
         return entropy
     
-    def predict_with_uncertainty(
+    def _mc_dropout_sample(
         self,
         complaints: List[str],
         num_samples: int = 20
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Predict with uncertainty estimation using Monte Carlo Dropout.
+        """Internal method: Predict with uncertainty using Monte Carlo Dropout.
         
         This method enables dropout during inference and runs multiple forward
         passes to estimate model uncertainty (epistemic uncertainty). The variance
         in predictions across samples indicates how uncertain the model is.
+        
+        This is an internal method that returns raw tensors. For a user-friendly
+        API, use predict_with_uncertainty() instead.
         
         Args:
             complaints: List of patient complaint strings
@@ -547,6 +550,95 @@ class DiagnosisDiscriminator(nn.Module):
         self.eval()
         
         return mean_probs, std_probs
+    
+    def predict_with_uncertainty(
+        self,
+        complaints: List[str],
+        num_samples: int = 20,
+        top_k: int = 3
+    ) -> List[List[Dict[str, float]]]:
+        """Predict diagnosis with epistemic uncertainty using Monte Carlo Dropout.
+        
+        Performs multiple forward passes with dropout enabled to estimate uncertainty.
+        Higher uncertainty indicates the model is less confident in its prediction.
+        
+        Args:
+            complaints: List of patient complaint strings
+            num_samples: Number of MC samples to draw (default 20)
+            top_k: Number of top predictions to return per complaint
+            
+        Returns:
+            List of lists, one per complaint. Each inner list contains dicts with keys:
+                - 'condition_code': ICD-10 code
+                - 'condition_name': Human-readable name
+                - 'probability': Mean probability across MC samples
+                - 'uncertainty': Standard deviation across MC samples
+                - 'confidence_level': 'high' (<0.3), 'medium' (0.3-0.6), 'low' (>0.6)
+                
+        Example:
+            >>> disc = DiagnosisDiscriminator()
+            >>> results = disc.predict_with_uncertainty(["I can't breathe"])
+            >>> print(results[0][0])
+            {
+                'condition_code': 'J45.9',
+                'condition_name': 'Asthma',
+                'probability': 0.75,
+                'uncertainty': 0.12,
+                'confidence_level': 'high'
+            }
+        """
+        # Enable dropout for uncertainty estimation
+        was_training = self.training
+        self.train()  # Enable dropout layers
+        
+        all_predictions = []
+        
+        # Perform multiple forward passes with dropout
+        for _ in range(num_samples):
+            with torch.no_grad():
+                outputs = self(complaints, return_features=False)
+                probs = F.softmax(outputs['diagnosis_logits'], dim=-1)
+                all_predictions.append(probs)
+        
+        # Restore original training state
+        if not was_training:
+            self.eval()
+        
+        # Compute statistics across MC samples
+        predictions_tensor = torch.stack(all_predictions)  # [num_samples, batch, num_conditions]
+        mean_probs = predictions_tensor.mean(dim=0)  # [batch, num_conditions]
+        std_probs = predictions_tensor.std(dim=0)    # [batch, num_conditions]
+        
+        # Convert to list of results
+        batch_results = []
+        for batch_idx in range(len(complaints)):
+            # Get all conditions with their stats
+            condition_results = []
+            for condition_idx, code in enumerate(self.condition_codes):
+                prob = mean_probs[batch_idx, condition_idx].item()
+                uncertainty = std_probs[batch_idx, condition_idx].item()
+                
+                # Classify confidence level based on uncertainty
+                if uncertainty < 0.3:
+                    confidence_level = 'high'
+                elif uncertainty < 0.6:
+                    confidence_level = 'medium'
+                else:
+                    confidence_level = 'low'
+                
+                condition_results.append({
+                    'condition_code': code,
+                    'condition_name': self.conditions[code]['name'],
+                    'probability': prob,
+                    'uncertainty': uncertainty,
+                    'confidence_level': confidence_level
+                })
+            
+            # Sort by probability and take top_k
+            condition_results.sort(key=lambda x: x['probability'], reverse=True)
+            batch_results.append(condition_results[:top_k])
+        
+        return batch_results
     
     def predict_with_explanation(
         self,
