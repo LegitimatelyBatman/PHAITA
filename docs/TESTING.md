@@ -15,6 +15,7 @@ python test_forum_scraping.py             # ~10s - Forum data augmentation
 python test_dialogue_engine.py            # ~5s  - Belief updating, information gain
 python test_diagnosis_orchestrator.py     # ~3s  - Ensemble, red-flags, escalation
 python test_conversation_flow.py          # ~5s  - End-to-end triage sessions
+python test_end_to_end_triage.py          # ~10s - Complete triage workflow integration
 python test_escalation_guidance.py        # ~3s  - Care routing validation
 ```
 
@@ -338,6 +339,25 @@ See [TESTING_MULTI_TURN_DIALOGUES.md](TESTING_MULTI_TURN_DIALOGUES.md) for detai
 - Top-k diagnosis ranking
 - Probability normalization
 - Condition filtering
+
+---
+
+#### `test_end_to_end_triage.py` (~10 seconds)
+**Purpose:** Complete end-to-end integration test simulating real patient triage workflow.
+
+**What it tests:**
+- **Complete asthma workflow:** Synthetic complaint generation → Multi-turn dialogue → Neural predictions → Final diagnosis with red-flag detection → Escalation guidance
+- **Emergency workflow:** Pneumothorax case with red-flags, emergency escalation validation
+- Full integration of SymptomGenerator, ComplaintGenerator, DialogueEngine, DiagnosisDiscriminator (mock mode), and DiagnosisOrchestrator
+- Patient journey from initial complaint to final triage recommendation
+- Differential diagnosis with escalation levels (🚑 emergency, ⚠️ urgent, 📋 routine)
+- Red-flag symptom detection and emergency routing
+
+**Dependencies:** Uses mock neural predictions for offline testing (network-independent).
+
+**Expected results:** 2/2 workflows pass (asthma correctly identified in top 3, emergency escalation triggered)
+
+**Console output:** Shows complete patient journey with dialogue progression, probability updates, and final recommendations.
 
 ---
 
