@@ -278,7 +278,7 @@ Complete guide to all PHAITA documentation.
 - ✅ README.md - Up to date
 - ✅ PROJECT_SUMMARY.md - Current
 - ✅ IMPLEMENTATION_SUMMARY.md - Current
-- ✅ CHANGE_HISTORY.md - Needs update (references pytest, should be plain Python)
+- ✅ CHANGE_HISTORY.md - Current
 
 ### Testing Documentation
 - ✅ TESTING.md - **NEW** comprehensive guide
