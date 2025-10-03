@@ -13,6 +13,7 @@ from .data.icd_conditions import RespiratoryConditions
 # Import model components
 from .models.generator import SymptomGenerator, ComplaintGenerator
 from .models.discriminator import DiagnosisDiscriminator
+from .models.discriminator_lite import LightweightDiscriminator
 from .models.bayesian_network import BayesianSymptomNetwork
 from .generation.patient_agent import (
     PatientDemographics,
@@ -52,6 +53,7 @@ __all__ = [
     "SymptomGenerator",
     "ComplaintGenerator",
     "DiagnosisDiscriminator",
+    "LightweightDiscriminator",
     "BayesianSymptomNetwork",
     "PatientDemographics",
     "PatientHistory",

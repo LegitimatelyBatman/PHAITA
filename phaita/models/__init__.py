@@ -5,6 +5,7 @@ PHAITA Models - Bayesian networks, generators, and discriminators.
 from .bayesian_network import BayesianSymptomNetwork
 from .generator import SymptomGenerator, ComplaintGenerator
 from .discriminator import DiagnosisDiscriminator
+from .discriminator_lite import LightweightDiscriminator
 
 # Import temporal module components (optional - requires torch)
 try:
@@ -25,6 +26,7 @@ __all__ = [
     "SymptomGenerator",
     "ComplaintGenerator",
     "DiagnosisDiscriminator",
+    "LightweightDiscriminator",
     "SymptomTimeline",
     "TemporalSymptomEncoder",
     "TemporalPatternMatcher",
