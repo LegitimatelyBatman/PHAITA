@@ -62,15 +62,50 @@ cd PHAITA
 ```
 
 ### Step 2: Install Dependencies
+
+Choose the installation method that matches your environment:
+
+#### Option A: Full Installation (All Features)
+**For:** Development environments with GPU support
 ```bash
-# Install core dependencies
+# Install all dependencies (core + GPU + dev + scraping)
 pip install -r requirements.txt
 
-# Optional: Install in editable mode for development
+# Or with setup.py
+pip install -e .[all]
+```
+
+#### Option B: Minimal Installation (CPU-Only)
+**For:** CPU-only environments or minimal deployments
+```bash
+# Install only core dependencies
+pip install -r requirements-base.txt
+
+# Or with setup.py
 pip install -e .
 ```
 
-**Expected Installation Time:** 2-5 minutes
+#### Option C: Custom Installation
+**For:** Specific use cases
+```bash
+# Core + GPU features (bitsandbytes, torch-geometric)
+pip install -e .[gpu]
+
+# Core + Development tools (pytest)
+pip install -e .[dev]
+
+# Core + Web scraping (praw, beautifulsoup4)
+pip install -e .[scraping]
+
+# Mix features as needed
+pip install -e .[gpu,dev]
+```
+
+**Expected Installation Time:**
+- Minimal (base): 2-3 minutes
+- Full (all): 3-5 minutes
+
+**Note:** GPU dependencies (bitsandbytes, torch-geometric) require CUDA. On CPU-only systems, these will not function properly even if installed.
 
 ### Step 3: Verify Installation
 ```bash

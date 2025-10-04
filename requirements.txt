@@ -1,9 +1,21 @@
+# Complete requirements file (includes ALL dependencies for backward compatibility)
+# For minimal installs, use the modular requirements files:
+#   - requirements-base.txt: Core dependencies only
+#   - requirements-gpu.txt: GPU-specific features (bitsandbytes, torch-geometric)
+#   - requirements-dev.txt: Development and testing tools
+#   - requirements-scraping.txt: Web scraping capabilities
+#
+# Or install via setup.py with extras:
+#   pip install .[gpu]       # Base + GPU features
+#   pip install .[dev]       # Base + Development tools
+#   pip install .[scraping]  # Base + Web scraping
+#   pip install .[all]       # Everything
+
+# Core Dependencies
 torch==2.5.1
 transformers==4.46.0
 datasets>=2.10.0
 accelerate>=0.20.0
-bitsandbytes==0.44.1
-torch-geometric==2.6.1
 networkx>=3.0
 scikit-learn>=1.3.0
 numpy>=1.24.0
@@ -14,9 +26,17 @@ seaborn>=0.12.0
 matplotlib>=3.7.0
 scipy>=1.10.0
 safetensors>=0.3.0
-praw>=7.7.0
 requests>=2.31.0
+
+# GPU-specific dependencies (optional - see requirements-gpu.txt)
+bitsandbytes==0.44.1
+torch-geometric==2.6.1
+
+# Web scraping dependencies (optional - see requirements-scraping.txt)
+praw>=7.7.0
 beautifulsoup4>=4.12.0
+
+# Development dependencies (optional - see requirements-dev.txt)
 pytest>=7.0
 
 # Optional for advanced GNN features

@@ -22,15 +22,56 @@ PHAITA requires significant computational resources for the full deep-learning s
 - **Network**: Internet connection required for initial model downloads
 
 ### Software Dependencies
-Exact versions are required for compatibility:
 
+PHAITA supports modular installation based on your needs:
+
+#### **Option 1: Full Installation (Recommended for Development)**
+Install all dependencies including GPU features, development tools, and web scraping:
+```bash
+pip install -r requirements.txt
+# or with setup.py
+pip install -e .[all]
+```
+
+#### **Option 2: Minimal Installation (CPU-Only)**
+Install only core dependencies for CPU-only operation:
+```bash
+pip install -r requirements-base.txt
+# or with setup.py
+pip install -e .
+```
+
+#### **Option 3: Custom Installation**
+Install specific feature sets as needed:
+```bash
+# Base + GPU features (bitsandbytes, torch-geometric)
+pip install -e .[gpu]
+
+# Base + Development tools (pytest)
+pip install -e .[dev]
+
+# Base + Web scraping (praw, beautifulsoup4)
+pip install -e .[scraping]
+```
+
+#### Core Dependencies (Always Required)
 - **Python**: 3.10+ (3.12 recommended)
-- **PyTorch**: 2.5.1 (with CUDA 11.8+ for GPU support)
+- **PyTorch**: 2.5.1
 - **Transformers**: 4.46.0 (HuggingFace)
-- **bitsandbytes**: 0.44.1 (for 4-bit model quantization, CUDA required)
-- **torch-geometric**: 2.6.1 (for Graph Neural Networks)
+- **Plus**: datasets, accelerate, numpy, pandas, scikit-learn, networkx, scipy, matplotlib, seaborn, tqdm, pyyaml, safetensors, requests
 
-See `requirements.txt` for complete dependency list.
+#### Optional GPU Dependencies (requirements-gpu.txt)
+- **bitsandbytes**: 0.44.1 (for 4-bit model quantization, **CUDA required**)
+- **torch-geometric**: 2.6.1 (for Graph Neural Networks, **falls back to MLP without it**)
+
+#### Optional Development Dependencies (requirements-dev.txt)
+- **pytest**: >=7.0 (for running tests)
+
+#### Optional Web Scraping Dependencies (requirements-scraping.txt)
+- **praw**: >=7.7.0 (Reddit API for forum data collection)
+- **beautifulsoup4**: >=4.12.0 (HTML parsing)
+
+**Note**: GPU dependencies require CUDA. CPU-only environments should skip `requirements-gpu.txt` or use the base installation option.
 
 ### Models Used
 The following models are automatically downloaded from HuggingFace Hub:
@@ -61,12 +102,42 @@ hallucinating random labels.
 - **Metrics and analysis**: Track diagnostic accuracy, diversity, realism, and failure cases from challenge evaluations.
 
 ## Getting Started
+
+### Installation
+
+Choose your installation method based on your environment and needs:
+
+#### Full Installation (All Features)
 ```bash
-# Install dependencies
+# Install all dependencies (GPU, dev tools, scraping)
 pip install -r requirements.txt
 
-# Optional: editable install
+# Or use setup.py with all extras
+pip install -e .[all]
+```
+
+#### Minimal Installation (CPU-Only, Core Features)
+```bash
+# Install only core dependencies
+pip install -r requirements-base.txt
+
+# Or use setup.py
 pip install -e .
+```
+
+#### Custom Installation
+```bash
+# Core + GPU features only
+pip install -e .[gpu]
+
+# Core + Development tools only
+pip install -e .[dev]
+
+# Core + Web scraping only
+pip install -e .[scraping]
+
+# Mix and match
+pip install -e .[gpu,dev]
 ```
 
 ### CLI Recipes
