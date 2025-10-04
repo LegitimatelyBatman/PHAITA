@@ -127,7 +127,7 @@ def test_challenge_command_uses_information_loop(capsys):
                 "confidence_interval": (0.35, 0.78),
             },
             {
-                "condition_code": "J44.1",
+                "condition_code": "J44.9",
                 "condition_name": "COPD",
                 "probability": 0.16,
                 "confidence_interval": (0.04, 0.32),

@@ -537,7 +537,7 @@ def challenge_command(args):
         # 1. Rare presentations
         print("\n📍 Category 1: Rare Presentations")
         for i in range(args.rare_cases):
-            condition_code = random.choice(["J45.9", "J44.1", "J18.9"])
+            condition_code = random.choice(["J45.9", "J44.9", "J18.9"])
             symptoms, metadata = network.sample_symptoms(
                 condition_code, 
                 include_rare=True,
@@ -557,7 +557,7 @@ def challenge_command(args):
         # Generate standard cases if no rare cases found
         if len(challenge_cases) == 0:
             for i in range(args.rare_cases):
-                condition_code = random.choice(["J45.9", "J44.1", "J18.9"])
+                condition_code = random.choice(["J45.9", "J44.9", "J18.9"])
                 symptoms, metadata = network.sample_symptoms(condition_code, severity="severe")
                 challenge_cases.append({
                     "type": "standard",
@@ -592,7 +592,7 @@ def challenge_command(args):
         print(f"\n📍 Category 3: Comorbidity-Influenced")
         comorbidity_cases = [
             ("J45.9", ["anxiety", "obesity"]),
-            ("J44.1", ["heart_failure"]),
+            ("J44.9", ["heart_failure"]),
             ("J18.9", ["immunocompromised"])
         ]
 
