@@ -1,31 +1,23 @@
+from pathlib import Path
+from typing import List
+
 from setuptools import setup, find_packages
+
+
+def read_requirements(path: str = "requirements.txt") -> List[str]:
+    requirements_path = Path(__file__).parent / path
+    lines = requirements_path.read_text(encoding="utf-8").splitlines()
+    return [
+        stripped
+        for stripped in (line.strip() for line in lines)
+        if stripped and not stripped.startswith("#") and not stripped.startswith("-")
+    ]
 
 setup(
     name="phaita",
     version="0.1.0",
     description="Pre-Hospital AI Triage Algorithm with Adversarial Training",
     packages=find_packages(),
-    install_requires=[
-        "torch==2.5.1",
-        "transformers==4.46.0",
-        "datasets>=2.10.0",
-        "accelerate>=0.20.0",
-        "bitsandbytes==0.44.1",
-        "torch-geometric==2.6.1",
-        "networkx>=3.0",
-        "scikit-learn>=1.3.0",
-        "numpy>=1.24.0",
-        "pandas>=2.0.0",
-        "tqdm>=4.65.0",
-        "pyyaml>=6.0",
-        "seaborn>=0.12.0",
-        "matplotlib>=3.7.0",
-        "scipy>=1.10.0",
-        "safetensors>=0.3.0",
-        "praw>=7.7.0",
-        "requests>=2.31.0",
-        "beautifulsoup4>=4.12.0",
-        "pytest>=7.0",
-    ],
+    install_requires=read_requirements(),
     python_requires=">=3.8",
 )
