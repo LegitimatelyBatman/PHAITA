@@ -172,7 +172,7 @@ python tests/test_template_diversity.py         # If template system changed
 
 **Always:**
 - ✅ `pip install -r requirements.txt` first
-- ✅ `python test_basic.py` to verify (~10s)
+- ✅ `python tests/test_basic.py` to verify (~10s)
 - ✅ Use template mode for dev/test
 - ✅ Expect HuggingFace retries offline (normal)
 - ✅ Read docstrings for dual-mode behavior
