@@ -14,40 +14,40 @@ pip install -e .  # optional editable install
 **Tests (all are plain Python scripts, NO pytest needed):**
 ```bash
 # Core tests (always run these first)
-python test_basic.py              # FAST ~10s - data, Bayesian, config, synthetic
-python test_enhanced_bayesian.py  # FAST ~10s - age/severity/rare/comorbidity
-python test_forum_scraping.py     # FAST ~10s - forum data, lay language
+python tests/test_basic.py              # FAST ~10s - data, Bayesian, config, synthetic
+python tests/test_enhanced_bayesian.py  # FAST ~10s - age/severity/rare/comorbidity
+python tests/test_forum_scraping.py     # FAST ~10s - forum data, lay language
 
 # Dialogue and conversation tests
-python test_dialogue_engine.py            # FAST ~5s - belief updating, info gain
-python test_diagnosis_orchestrator.py     # FAST ~3s - ensemble, red-flags, escalation
-python test_conversation_flow.py          # FAST ~5s - end-to-end triage sessions
-python test_escalation_guidance.py        # FAST ~3s - care routing validation
+python tests/test_dialogue_engine.py            # FAST ~5s - belief updating, info gain
+python tests/test_diagnosis_orchestrator.py     # FAST ~3s - ensemble, red-flags, escalation
+python tests/test_conversation_flow.py          # FAST ~5s - end-to-end triage sessions
+python tests/test_escalation_guidance.py        # FAST ~3s - care routing validation
 
 # Model and architecture tests
-python test_causal_graph.py               # FAST ~5s - GNN causal edges
-python test_template_diversity.py         # FAST ~5s - template generation
-python test_temporal_modeling.py          # FAST ~10s - temporal symptom progression
-python test_uncertainty.py                # FAST ~5s - uncertainty quantification
-python test_gnn_performance.py            # FAST ~10s - GNN benchmarks
+python tests/test_causal_graph.py               # FAST ~5s - GNN causal edges
+python tests/test_template_diversity.py         # FAST ~5s - template generation
+python tests/test_temporal_modeling.py          # FAST ~10s - temporal symptom progression
+python tests/test_uncertainty.py                # FAST ~5s - uncertainty quantification
+python tests/test_gnn_performance.py            # FAST ~10s - GNN benchmarks
 
 # CLI and workflow tests
-python test_conversation_engine.py        # FAST ~5s - conversation engine logic
-python test_cli_challenge_command.py      # FAST ~2s - challenge CLI
-python test_cli_triage_workflow.py        # FAST ~5s - diagnose CLI workflow
+python tests/test_conversation_engine.py        # FAST ~5s - conversation engine logic
+python tests/test_cli_challenge_command.py      # FAST ~2s - challenge CLI
+python tests/test_cli_triage_workflow.py        # FAST ~5s - diagnose CLI workflow
 
 # Integration tests
-python test_integration.py                # SLOW ~2min - requires network, downloads models
+python tests/test_integration.py                # SLOW ~2min - requires network, downloads models
 
 # Note: Additional test files exist for specific features (model loader, patient CLI, etc.)
-# See docs/TESTING.md for complete documentation of all 22 test files
+# See docs/TESTING.md for complete documentation of all 26 test files
 ```
 ⚠️ Integration test attempts model downloads, retries ~60s, then falls back gracefully (expected).
 
 **Demos:**
 ```bash
-python simple_demo.py                              # No dependencies, instant
-python cli.py demo --num-examples 5                # Uses template fallback
+python demos/simple_demo.py                         # No dependencies, instant
+python cli.py demo --num-examples 5                 # Uses template fallback
 python cli.py generate --count 10 --output out.json
 python cli.py diagnose --complaint "can't breathe"
 ```
@@ -58,29 +58,47 @@ python cli.py diagnose --complaint "can't breathe"
 
 ```
 phaita/                         # Core package
-  data/
+  data/                         # Medical data and scraping
     icd_conditions.py           # 10 ICD-10 respiratory conditions
     forum_scraper.py            # Lay/medical term mapping
     synthetic_generator.py      # Batch generation
     preprocessing.py            # Text normalization
-  models/
+    red_flags.py                # Emergency criteria
+  models/                       # Neural networks and ML
     discriminator.py            # DeBERTa + GNN classifier (~3.8M params)
     generator.py                # Mistral 7B / templates (512 params fallback)
     bayesian_network.py         # Symptom sampler
     enhanced_bayesian_network.py # Age/severity/rare logic
     gnn_module.py               # Symptom graph attention
     question_generator.py       # Clarifying questions
-  training/
+  conversation/                 # Dialogue management
+    dialogue_engine.py          # Belief updating, info gain
+    engine.py                   # Conversation flow control
+  triage/                       # Diagnosis and escalation
+    diagnosis_orchestrator.py   # Ranked diagnoses with red-flags
+    diagnosis.py                # Individual diagnosis generation
+    info_sheet.py               # Patient information sheets
+  training/                     # Model training
     adversarial_trainer.py      # G/D alternating optimization
-  utils/
+  utils/                        # Utilities
     config.py                   # YAML loader (config.yaml)
     metrics.py                  # Accuracy, diversity
     realism_scorer.py           # Transformer realism scoring
-cli.py                          # Main interface (train/demo/generate/diagnose/challenge)
-test_*.py                       # Test suites (22 files - see docs/TESTING.md)
-demo_*.py                       # Demos (8 files)
-config.yaml                     # Model names, hyperparams, architecture
-requirements.txt                # Dependencies (torch>=2.0, transformers>=4.35, etc.)
+    model_loader.py             # Model download with retry logic
+
+tests/                          # All test files (26 files)
+demos/                          # Demo scripts (10 files)
+docs/                           # Documentation
+  guides/                       # SOP and training guides
+  modules/                      # Module-specific documentation
+  updates/                      # Consolidated update logs
+  architecture/                 # Architecture documentation
+  features/                     # Feature-specific guides
+
+config/                         # YAML configuration files
+scripts/                        # Utility scripts
+cli.py                          # Main CLI interface
+patient_cli.py                  # Web interface
 ```
 
 **Key exports (phaita/__init__.py):** RespiratoryConditions, SymptomGenerator, ComplaintGenerator, DiagnosisDiscriminator, BayesianSymptomNetwork, AdversarialTrainer, Config
@@ -92,16 +110,16 @@ requirements.txt                # Dependencies (torch>=2.0, transformers>=4.35, 
 **Test after changes:**
 ```bash
 # Always run core tests first
-python test_basic.py              # Core functionality
-python test_enhanced_bayesian.py  # If Bayesian logic changed
-python test_forum_scraping.py     # If data layer changed
+python tests/test_basic.py              # Core functionality
+python tests/test_enhanced_bayesian.py  # If Bayesian logic changed
+python tests/test_forum_scraping.py     # If data layer changed
 
 # Run feature-specific tests based on changes
-python test_dialogue_engine.py            # If dialogue system changed
-python test_diagnosis_orchestrator.py     # If diagnosis/red-flags changed
-python test_conversation_flow.py          # If conversation flow changed
-python test_causal_graph.py               # If GNN/graph changed
-python test_template_diversity.py         # If template system changed
+python tests/test_dialogue_engine.py            # If dialogue system changed
+python tests/test_diagnosis_orchestrator.py     # If diagnosis/red-flags changed
+python tests/test_conversation_flow.py          # If conversation flow changed
+python tests/test_causal_graph.py               # If GNN/graph changed
+python tests/test_template_diversity.py         # If template system changed
 
 # See docs/TESTING.md for complete test guide
 # Skip test_integration.py unless testing full stack
@@ -123,7 +141,7 @@ python test_template_diversity.py         # If template system changed
 
 **Automatic fallback:** Missing torch_geometric → MLP encoder; missing models → templates; missing transformers → simple text. **DON'T fix "failed to download" errors - expected offline.**
 
-**Test expectations:** test_basic.py (4/4), test_enhanced_bayesian.py (6/6), test_forum_scraping.py (3/3), test_dialogue_engine.py (all pass), test_diagnosis_orchestrator.py (11/11), test_conversation_flow.py (5/5), test_escalation_guidance.py (6/6). See docs/TESTING.md for all 22 test files.
+**Test expectations:** test_basic.py (4/4), test_enhanced_bayesian.py (6/6), test_forum_scraping.py (3/3), test_dialogue_engine.py (all pass), test_diagnosis_orchestrator.py (11/11), test_conversation_flow.py (5/5), test_escalation_guidance.py (6/6). See docs/TESTING.md for all 26 test files.
 
 **Python 3.10+** required. Check: `python --version`
 
@@ -133,12 +151,18 @@ python test_template_diversity.py         # If template system changed
 
 ## Documentation
 - `docs/DOCUMENTATION_INDEX.md` - Complete navigation guide to all documentation
-- `docs/TESTING.md` - Comprehensive testing guide (all 22 test files)
+- `docs/guides/SOP.md` - Comprehensive Standard Operating Procedure (training, implementation, running)
+- `docs/TESTING.md` - Comprehensive testing guide (all 26 test files)
 - `docs/TESTING_MULTI_TURN_DIALOGUES.md` - Dialogue integration tests
+- `docs/modules/DATA_MODULE.md` - Data layer documentation
+- `docs/modules/MODELS_MODULE.md` - Neural networks documentation
+- `docs/modules/CONVERSATION_MODULE.md` - Dialogue engine documentation
+- `docs/modules/TRIAGE_MODULE.md` - Diagnosis and red-flags documentation
+- `docs/modules/IMPLEMENTATION_SUMMARY.md` - High-level architecture
+- `docs/modules/IMPLEMENTATION_DETAILS.md` - Deep-learning details
+- `docs/updates/UPDATE_LOG.md` - Consolidated update history
 - `README.md` - Quick start, CLI, API
 - `PROJECT_SUMMARY.md` - Problem, solution, vision
-- `IMPLEMENTATION_SUMMARY.md` - Module guide
-- `IMPLEMENTATION_DETAILS.md` - DL architecture
 - `DEEP_LEARNING_GUIDE.md` - GPU setup, troubleshooting
 - `CHANGE_HISTORY.md` - Fixes, outstanding work
 

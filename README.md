@@ -72,7 +72,7 @@ pip install -e .
 ### CLI Recipes
 ```bash
 # Run an interactive demo
-python cli.py demo --num-examples 5
+python demos/simple_demo.py
 
 # Generate synthetic complaints
 python cli.py generate --count 10 --output complaints.json
@@ -169,30 +169,48 @@ for candidate in predictions[0]:
 
 **Note**: All models now require `use_pretrained=True` (the default). Attempting to use `use_pretrained=False` will raise a `ValueError`.
 
-## Repository Guide
+## Repository Structure
 ```
-phaita/                Core package (data, models, training, utils)
-cli.py                 Command-line interface for demos and tools
-demo_*.py              Ready-to-run showcase scripts
-test_*.py              Unit and integration tests
-*.md                   Focused documentation (architecture, implementation, research notes)
+phaita/                # Core package (data, models, training, utils, conversation, triage)
+├── data/              # Medical conditions, forum scraping, synthetic generation
+├── models/            # Neural networks (generator, discriminator, Bayesian, GNN)
+├── training/          # Adversarial trainer
+├── utils/             # Config, metrics, model loader, realism scorer
+├── conversation/      # Dialogue engine, conversation flow
+└── triage/            # Diagnosis orchestrator, red-flags, escalation
+
+docs/                  # Documentation
+├── guides/            # Implementation and training guides (SOP)
+├── modules/           # Module-specific documentation
+├── updates/           # Consolidated update logs
+├── architecture/      # Architecture documentation
+└── features/          # Feature-specific guides
+
+tests/                 # All test files (26 test scripts)
+demos/                 # Demo scripts (10 demos)
+config/                # YAML configuration files
+scripts/               # Utility scripts (forum scraping, profiling)
+
+cli.py                 # Command-line interface
+patient_cli.py         # Web interface
+config.yaml            # Main configuration file
 ```
 
 ## Testing
 
-PHAITA includes **22 comprehensive test suites** (no pytest required - plain Python):
+PHAITA includes **26 comprehensive test suites** (no pytest required - plain Python):
 
 ```bash
 # Quick validation - core tests (~30 seconds)
-python test_basic.py                      # Core data, config, Bayesian
-python test_enhanced_bayesian.py          # Age/severity/rare presentations
-python test_forum_scraping.py             # Forum data augmentation
-python test_dialogue_engine.py            # Belief updating, information gain
-python test_diagnosis_orchestrator.py     # Ensemble, red-flags, escalation
+python tests/test_basic.py                      # Core data, config, Bayesian
+python tests/test_enhanced_bayesian.py          # Age/severity/rare presentations
+python tests/test_forum_scraping.py             # Forum data augmentation
+python tests/test_dialogue_engine.py            # Belief updating, information gain
+python tests/test_diagnosis_orchestrator.py     # Ensemble, red-flags, escalation
 
 # Integration tests - end-to-end workflows (~10 seconds)
-python test_conversation_flow.py          # Complete triage sessions
-python test_escalation_guidance.py        # Care routing validation
+python tests/test_conversation_flow.py          # Complete triage sessions
+python tests/test_escalation_guidance.py        # Care routing validation
 ```
 
 **Test coverage includes:**
@@ -206,16 +224,29 @@ python test_escalation_guidance.py        # Care routing validation
 - ✅ Uncertainty quantification
 - ✅ CLI interfaces and workflows
 
-See **[docs/TESTING.md](docs/TESTING.md)** for the complete testing guide with all 22 test files documented.
+See **[docs/TESTING.md](docs/TESTING.md)** for the complete testing guide with all test files documented.
 
 ## Documentation Map
-- **[docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md)** – Complete navigation guide to all documentation.
-- **[docs/TESTING.md](docs/TESTING.md)** – Comprehensive testing guide with all 22 test files documented.
-- **PROJECT_SUMMARY.md** – Problem statement, solution outline, and roadmap.
-- **IMPLEMENTATION_SUMMARY.md** – High-level tour of major modules.
-- **IMPLEMENTATION_DETAILS.md** – Deep-learning upgrade highlights and references.
-- **DEEP_LEARNING_GUIDE.md** – Practical guidance for enabling the full model stack.
-- **CHANGE_HISTORY.md** – Consolidated audit notes, historical fixes, and outstanding work.
+
+### Core Documentation (Start Here)
+- **[docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md)** – Complete navigation guide to all documentation
+- **[docs/guides/SOP.md](docs/guides/SOP.md)** – Comprehensive Standard Operating Procedure (training, implementation, running)
+- **[docs/TESTING.md](docs/TESTING.md)** – Complete testing guide with all 26 test files documented
+- **[README.md](README.md)** – This file - quick start and overview
+
+### Module Documentation
+- **[docs/modules/DATA_MODULE.md](docs/modules/DATA_MODULE.md)** – Data layer, ICD conditions, forum scraping, red-flags
+- **[docs/modules/MODELS_MODULE.md](docs/modules/MODELS_MODULE.md)** – Neural networks, Bayesian networks, GNN, generator/discriminator
+- **[docs/modules/CONVERSATION_MODULE.md](docs/modules/CONVERSATION_MODULE.md)** – Dialogue engine, belief updating, conversation flow
+- **[docs/modules/TRIAGE_MODULE.md](docs/modules/TRIAGE_MODULE.md)** – Diagnosis orchestration, red-flags, escalation guidance
+- **[docs/modules/IMPLEMENTATION_SUMMARY.md](docs/modules/IMPLEMENTATION_SUMMARY.md)** – High-level architecture overview
+- **[docs/modules/IMPLEMENTATION_DETAILS.md](docs/modules/IMPLEMENTATION_DETAILS.md)** – Deep-learning technical details
+
+### Guides and References
+- **[docs/updates/UPDATE_LOG.md](docs/updates/UPDATE_LOG.md)** – Consolidated update history, fixes, and verifications
+- **[DEEP_LEARNING_GUIDE.md](DEEP_LEARNING_GUIDE.md)** – GPU setup and troubleshooting
+- **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** – Problem statement, solution outline, and roadmap
+- **[CHANGE_HISTORY.md](CHANGE_HISTORY.md)** – Project evolution and outstanding work
 
 ## License & Disclaimer
 PHAITA is released under the MIT License. The project is for research and educational purposes only and must not be used for real-world medical decision making without regulatory approval.
