@@ -3,12 +3,14 @@ Symptom and complaint generators using Bayesian networks and language models.
 Requires transformers and bitsandbytes to be properly installed.
 """
 
+import logging
 import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from typing import List, Optional, Dict, Iterable
+from requests.exceptions import HTTPError
 from .bayesian_network import BayesianSymptomNetwork
 from ..data.icd_conditions import RespiratoryConditions
 from ..data.template_loader import TemplateManager
@@ -46,6 +48,7 @@ except (ImportError, ModuleNotFoundError):
     # bitsandbytes is optional - will use CPU mode without quantization
 
 
+logger = logging.getLogger(__name__)
 DEFAULT_COMPLAINT_MODEL = ModelConfig().mistral_model
 
 
@@ -223,6 +226,7 @@ class ComplaintGenerator(nn.Module):
             self.model.eval()
             print(f"✓ Loaded {model_name} successfully")
         except ModelDownloadError as e:
+            logger.error(f"Model download failed for {model_name}: {type(e).__name__}: {e}")
             requirements = format_transformer_requirements(
                 include_bitsandbytes=True,
                 include_cuda_note=True,
@@ -233,7 +237,8 @@ class ComplaintGenerator(nn.Module):
                 f"{e}\n"
                 f"{requirements}"
             ) from e
-        except Exception as e:
+        except FileNotFoundError as e:
+            logger.error(f"Model files not found for {model_name}: {e}")
             requirements = format_transformer_requirements(
                 include_bitsandbytes=True,
                 include_cuda_note=True,
@@ -241,7 +246,20 @@ class ComplaintGenerator(nn.Module):
             )
             raise RuntimeError(
                 f"Failed to load model {model_name}. "
-                f"Error: {e}\n"
+                f"Model files not found: {e}\n"
+                f"{requirements}\n"
+                f"The model may not have been downloaded or the model name is incorrect."
+            ) from e
+        except (OSError, ValueError, HTTPError) as e:
+            logger.error(f"Model loading failed for {model_name}: {type(e).__name__}: {e}")
+            requirements = format_transformer_requirements(
+                include_bitsandbytes=True,
+                include_cuda_note=True,
+                internet_note="- Internet connection to download model from HuggingFace Hub",
+            )
+            raise RuntimeError(
+                f"Failed to load model {model_name}. "
+                f"Error: {type(e).__name__}: {e}\n"
                 f"{requirements}"
             ) from e
     
