@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -469,11 +470,10 @@ class ForumDataAugmentation:
             augmented_complaint = complaint
             for medical, lay_terms in self.mapper.reverse_mappings.items():
                 normalized_medical = medical.replace("_", " ")
-                if normalized_medical in augmented_complaint.lower():
+                pattern = re.compile(re.escape(normalized_medical), flags=re.IGNORECASE)
+                if pattern.search(augmented_complaint):
                     lay_term = lay_terms[0]
-                    augmented_complaint = augmented_complaint.replace(
-                        normalized_medical, lay_term
-                    )
+                    augmented_complaint = pattern.sub(lay_term, augmented_complaint)
             augmented.append(augmented_complaint)
         return augmented
 

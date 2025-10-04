@@ -95,11 +95,18 @@ def test_data_augmentation():
         augmenter = create_data_augmentation()
         
         # Test complaint augmentation
-        complaints = ["Patient has dyspnea and chest pain", "Cough with fever present"]
+        complaints = [
+            "Patient has Dyspnea and Chest Pain",
+            "Cough with fever present",
+        ]
         condition_codes = ["J45.9", "J18.9"]
-        
+
         augmented = augmenter.augment_complaints_with_lay_terms(complaints, condition_codes)
         assert len(augmented) == len(complaints), "Should return same number of complaints"
+        assert "Dyspnea" not in augmented[0]
+        assert "Chest Pain" not in augmented[0]
+        assert "can't breathe" in augmented[0]
+        assert "chest hurts" in augmented[0]
         
         # Test forum complaints retrieval
         forum_complaints = augmenter.get_forum_complaints_for_pretraining(max_complaints=10)
