@@ -13,6 +13,7 @@ from .bayesian_network import BayesianSymptomNetwork
 from ..data.icd_conditions import RespiratoryConditions
 from ..data.template_loader import TemplateManager
 from ..utils.model_loader import load_model_and_tokenizer, ModelDownloadError
+from ..utils.config import ModelConfig
 from ..generation.patient_agent import (
     PatientDemographics,
     PatientHistory,
@@ -38,6 +39,9 @@ try:
 except (ImportError, ModuleNotFoundError):
     HAS_BITSANDBYTES = False
     # bitsandbytes is optional - will use CPU mode without quantization
+
+
+DEFAULT_COMPLAINT_MODEL = ModelConfig().mistral_model
 
 
 class SymptomGenerator:
@@ -86,7 +90,7 @@ class ComplaintGenerator(nn.Module):
     
     def __init__(
         self,
-        model_name: str = "mistralai/Mistral-7B-Instruct-v0.2",
+        model_name: str = DEFAULT_COMPLAINT_MODEL,
         use_pretrained: bool = True,
         use_4bit: bool = True,
         max_new_tokens: int = 150,

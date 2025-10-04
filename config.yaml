@@ -1,6 +1,6 @@
 model:
   deberta_model: "microsoft/deberta-base"
-  mistral_model: "mistralai/Mistral-7B-Instruct-v0.1"
+  mistral_model: "mistralai/Mistral-7B-Instruct-v0.2"
   gnn_hidden_dim: 128
   gnn_num_layers: 3
   use_quantization: true

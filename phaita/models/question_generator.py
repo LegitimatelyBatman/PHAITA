@@ -9,6 +9,7 @@ import random
 import torch
 import torch.nn as nn
 from ..utils.model_loader import load_model_and_tokenizer, ModelDownloadError
+from ..utils.config import ModelConfig
 
 # Enforce required dependencies
 try:
@@ -29,6 +30,9 @@ except (ImportError, ModuleNotFoundError):
     # bitsandbytes is optional - will use CPU mode without quantization
 
 
+DEFAULT_QUESTION_MODEL = ModelConfig().mistral_model
+
+
 class QuestionGenerator(nn.Module):
     """
     Generates clarifying questions for interactive triage.
@@ -38,7 +42,7 @@ class QuestionGenerator(nn.Module):
     
     def __init__(
         self,
-        model_name: str = "mistralai/Mistral-7B-Instruct-v0.2",
+        model_name: str = DEFAULT_QUESTION_MODEL,
         use_pretrained: bool = True,
         use_4bit: bool = True,
         max_new_tokens: int = 100,
