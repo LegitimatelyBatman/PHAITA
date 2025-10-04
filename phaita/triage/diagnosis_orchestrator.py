@@ -131,7 +131,7 @@ class DiagnosisOrchestrator:
         Returns:
             List of red-flag symptoms that are present
         """
-        # Get red-flags for this condition
+        # Get red-flags for this condition (technical names for matching)
         condition_red_flags = self.red_flags_db.get(condition_code, {}).get(
             "red_flags", []
         )

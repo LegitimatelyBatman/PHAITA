@@ -1,5 +1,10 @@
 # Red-flag symptom mappings for respiratory conditions
-# Maps ICD-10 codes to emergency symptoms that require immediate escalation
+# Maps ICD-10 codes to emergency symptoms and escalation guidance
+#
+# Structure:
+# - red_flags: Technical symptom names (underscored) for matching
+# - symptoms: Human-readable symptom descriptions for display
+# - escalation: Clinical guidance text for escalation
 
 J45.9:  # Asthma
   red_flags:
@@ -8,6 +13,11 @@ J45.9:  # Asthma
     - cyanosis
     - altered_mental_status
     - peak_flow_below_50_percent
+  symptoms:
+    - inability to speak more than a few words
+    - bluish lips or fingernails
+    - peak flow < 50% of personal best
+  escalation: Use a rescue inhaler immediately and seek emergency care if symptoms do not improve within minutes.
 
 J18.9:  # Pneumonia, unspecified organism
   red_flags:
@@ -16,6 +26,11 @@ J18.9:  # Pneumonia, unspecified organism
     - rapid_breathing_over_30
     - oxygen_saturation_below_92
     - severe_chest_pain
+  symptoms:
+    - confusion or altered mental status
+    - rapid breathing > 30 breaths per minute
+    - oxygen saturation below 92%
+  escalation: Urgent evaluation in an emergency department is recommended, especially for older adults or those with chronic illness.
 
 J44.9:  # Chronic obstructive pulmonary disease, unspecified
   red_flags:
@@ -24,6 +39,11 @@ J44.9:  # Chronic obstructive pulmonary disease, unspecified
     - new_confusion
     - drowsiness
     - respiratory_failure
+  symptoms:
+    - severe breathlessness at rest
+    - worsening swelling in legs or abdomen
+    - drowsiness or new confusion
+  escalation: Initiate rescue medications and contact emergency services if breathing support is not available at home.
 
 J06.9:  # Acute upper respiratory infection, unspecified
   red_flags:
@@ -32,6 +52,11 @@ J06.9:  # Acute upper respiratory infection, unspecified
     - inability_to_swallow
     - dehydration
     - high_fever_with_breathing_difficulty
+  symptoms:
+    - stridor or noisy breathing at rest
+    - inability to swallow fluids
+    - signs of dehydration in infants or older adults
+  escalation: Seek urgent care if breathing becomes noisy, swallowing is impaired, or hydration cannot be maintained.
 
 J20.9:  # Acute bronchitis, unspecified
   red_flags:
@@ -40,6 +65,11 @@ J20.9:  # Acute bronchitis, unspecified
     - shortness_of_breath_at_rest
     - severe_chest_pain
     - wheezing_unresponsive_to_treatment
+  symptoms:
+    - high fever lasting more than 3 days
+    - bloody sputum
+    - shortness of breath at rest
+  escalation: Schedule prompt medical review; escalate to emergency services for breathing difficulty or blood in sputum.
 
 J81.0:  # Acute pulmonary edema
   red_flags:
@@ -48,6 +78,11 @@ J81.0:  # Acute pulmonary edema
     - chest_pain_with_sweating
     - rapid_heart_rate
     - severe_anxiety
+  symptoms:
+    - sudden severe breathlessness
+    - frothy pink sputum
+    - chest pain with sweating
+  escalation: Call emergency services immediately—acute pulmonary edema is a medical emergency.
 
 J93.0:  # Spontaneous tension pneumothorax
   red_flags:
@@ -56,6 +91,11 @@ J93.0:  # Spontaneous tension pneumothorax
     - fainting
     - asymmetrical_chest_movement
     - severe_breathing_difficulty
+  symptoms:
+    - sudden stabbing chest pain
+    - rapid collapse or fainting
+    - asymmetrical chest movement
+  escalation: Seek emergency care without delay; a collapsed lung requires urgent intervention.
 
 J15.9:  # Bacterial pneumonia, unspecified
   red_flags:
@@ -64,6 +104,11 @@ J15.9:  # Bacterial pneumonia, unspecified
     - lethargy
     - oxygen_saturation_below_92
     - severe_dehydration
+  symptoms:
+    - persistent high fever
+    - confusion or lethargy
+    - oxygen saturation below 92%
+  escalation: Antibiotics may be required urgently—advise immediate clinical assessment.
 
 J12.9:  # Viral pneumonia, unspecified
   red_flags:
@@ -72,6 +117,11 @@ J12.9:  # Viral pneumonia, unspecified
     - cyanosis
     - severe_fatigue
     - unresponsive_to_initial_treatment
+  symptoms:
+    - rapid breathing over 30 breaths per minute
+    - difficulty speaking full sentences
+    - lips or face turning blue
+  escalation: Advise emergency evaluation, particularly for high-risk groups such as infants and older adults.
 
 J21.9:  # Acute bronchiolitis, unspecified
   red_flags:
@@ -81,3 +131,8 @@ J21.9:  # Acute bronchiolitis, unspecified
     - severe_dehydration
     - grunting
     - severe_chest_retractions
+  symptoms:
+    - pauses in breathing (apnea)
+    - poor feeding or dehydration
+    - grunting or severe chest retractions
+  escalation: Infants with these signs need immediate emergency assessment and possible hospitalization.
