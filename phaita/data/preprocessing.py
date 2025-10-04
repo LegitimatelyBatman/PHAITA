@@ -7,6 +7,8 @@ from typing import List, Dict, Optional, Tuple
 import json
 import re
 
+from .icd_conditions import RespiratoryConditions
+
 try:
     from transformers import AutoTokenizer
     TRANSFORMERS_AVAILABLE = True
@@ -48,35 +50,79 @@ class DataPreprocessor:
         self._build_medical_terms()
     
     def _build_medical_terms(self):
-        """Build dictionary of medical terms for extraction."""
-        self.medical_terms = {
-            # Respiratory symptoms
-            "wheezing", "wheeze", "dyspnea", "shortness of breath", "breathlessness",
-            "cough", "coughing", "chest pain", "chest tightness", "tight chest",
-            "fever", "fatigue", "productive cough", "dry cough",
-            "tachypnea", "rapid breathing", "cyanosis", "sputum",
-            
-            # Severity indicators
-            "severe", "moderate", "mild", "acute", "chronic",
-            "unable to speak", "gasping", "distress",
-            
-            # Timing
-            "sudden", "gradual", "intermittent", "constant", "persistent",
-            
-            # Location
-            "bilateral", "unilateral", "upper", "lower", "right", "left"
-        }
+        """Build dictionary of medical terms for extraction.
         
-        # Common lay terms that map to medical terms
-        self.lay_to_medical = {
-            "can't breathe": "dyspnea",
+        Dynamically generates the list from RespiratoryConditions.get_vocabulary()
+        to ensure the preprocessor stays in sync with the latest condition definitions.
+        """
+        # Get vocabulary from RespiratoryConditions
+        vocab = RespiratoryConditions.get_vocabulary()
+        
+        # Build medical_terms set from vocabulary
+        self.medical_terms = set()
+        
+        # Add symptoms (both with underscores and spaces)
+        for symptom in vocab.get('symptoms', []):
+            self.medical_terms.add(symptom)
+            self.medical_terms.add(symptom.replace('_', ' '))
+        
+        # Add severity indicators
+        for indicator in vocab.get('severity_indicators', []):
+            self.medical_terms.add(indicator)
+            self.medical_terms.add(indicator.replace('_', ' '))
+        
+        # Add condition names (lowercase for matching)
+        for name in vocab.get('condition_names', []):
+            self.medical_terms.add(name.lower())
+        
+        # Add common severity adjectives (useful for categorization)
+        severity_adjectives = ["severe", "moderate", "mild", "acute", "chronic"]
+        self.medical_terms.update(severity_adjectives)
+        
+        # Add common timing terms (still useful for categorization)
+        timing_terms = ["sudden", "gradual", "intermittent", "constant", "persistent"]
+        self.medical_terms.update(timing_terms)
+        
+        # Add common location terms (still useful for categorization)
+        location_terms = ["bilateral", "unilateral", "upper", "lower", "right", "left"]
+        self.medical_terms.update(location_terms)
+        
+        # Build lay_to_medical mapping from vocabulary
+        self.lay_to_medical = {}
+        
+        # Map lay terms to their corresponding medical terms
+        # Use symptoms as the medical terms since lay terms describe symptoms
+        for lay_term in vocab.get('lay_terms', []):
+            # Map common lay phrases to canonical medical terms
+            lay_lower = lay_term.lower()
+            
+            # Common mappings for respiratory symptoms
+            if "can't breathe" in lay_lower or "cant breathe" in lay_lower:
+                self.lay_to_medical[lay_lower] = "dyspnea"
+            elif "short of breath" in lay_lower or "breathless" in lay_lower:
+                self.lay_to_medical[lay_lower] = "dyspnea"
+            elif "wheezy" in lay_lower or "wheeze" in lay_lower:
+                self.lay_to_medical[lay_lower] = "wheezing"
+            elif "tight chest" in lay_lower:
+                self.lay_to_medical[lay_lower] = "chest tightness"
+            elif "chest hurts" in lay_lower or "chest pain" in lay_lower:
+                self.lay_to_medical[lay_lower] = "chest pain"
+            elif "cough" in lay_lower:
+                self.lay_to_medical[lay_lower] = "cough"
+            elif "lung infection" in lay_lower:
+                self.lay_to_medical[lay_lower] = "pneumonia"
+            elif "fever" in lay_lower or "hot" in lay_lower:
+                self.lay_to_medical[lay_lower] = "fever"
+            elif "tired" in lay_lower or "exhausted" in lay_lower or "fatigue" in lay_lower:
+                self.lay_to_medical[lay_lower] = "fatigue"
+        
+        # Add some additional common mappings not explicitly in vocabulary
+        additional_mappings = {
             "can't catch my breath": "dyspnea",
-            "wheezy": "wheezing",
-            "breathless": "dyspnea",
-            "tight chest": "chest tightness",
-            "chest hurts": "chest pain",
-            "lung infection": "pneumonia"
+            "gasping for air": "dyspnea",
+            "whistling breath": "wheezing",
         }
+        self.lay_to_medical.update(additional_mappings)
     
     def preprocess_complaints(
         self,
