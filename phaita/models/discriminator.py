@@ -421,6 +421,9 @@ class DiagnosisDiscriminator(nn.Module):
                 - ``condition_name``: Friendly condition name
                 - ``probability``: Model probability for the diagnosis
                 - ``confidence_interval``: Tuple of (lower, upper) bounds
+                  computed via a Wilson score interval when MC dropout
+                  sampling is available. Falls back to a degenerate interval
+                  around the point estimate when no sampling is performed.
                 - ``evidence``: Supporting symptom and severity indicators
                 - ``uncertainty``: Uncertainty score (0-1, lower is more certain)
                 - ``confidence_level``: "high" or "low" based on uncertainty threshold
@@ -470,17 +473,12 @@ class DiagnosisDiscriminator(nn.Module):
                 condition_code = self.condition_codes[condition_idx.item()]
                 condition_data = RespiratoryConditions.get_condition_by_code(condition_code)
                 
-                # Calculate effective sample size for confidence interval
-                logit_spread = 1.0  # Default when using MC dropout
-                if not use_mc_dropout:
-                    # Use logit spread as before
-                    logit_spread = prob_value * (1 - prob_value) * 100
-                effective_sample_size = max(int(logit_spread * 10), 20)
-                
-                confidence_interval = self._estimate_confidence_interval(
-                    prob_value,
-                    effective_sample_size
-                )
+                # Estimate a credible interval for the probability. When MC dropout
+                # sampling is enabled we use the true number of samples collected.
+                # Without sampling (deterministic forward pass) the helper returns a
+                # degenerate interval anchored at the point estimate.
+                sample_count = num_mc_samples if use_mc_dropout else 0
+                confidence_interval = self._estimate_confidence_interval(prob_value, sample_count)
 
                 evidence = {
                     "key_symptoms": condition_data.get("symptoms", [])[:3],
@@ -507,18 +505,32 @@ class DiagnosisDiscriminator(nn.Module):
 
     @staticmethod
     def _estimate_confidence_interval(probability: float, sample_size: int) -> tuple:
-        """Estimate a simple 95% confidence interval around a probability.
+        """Compute a Wilson score 95% interval for a Bernoulli proportion.
 
-        The interval is computed using a normal approximation of the
-        binomial distribution with an empirically derived pseudo sample size.
-        The bounds are clipped to the valid range of [0, 1].
+        Args:
+            probability: Point estimate of the success probability.
+            sample_size: Number of independent Monte Carlo samples that
+                produced the estimate. When zero (no sampling), the method
+                returns a degenerate interval anchored at the point estimate.
+
+        Returns:
+            Tuple of ``(lower, upper)`` bounds clipped to ``[0, 1]``.
         """
-        pseudo_n = max(sample_size, 1)
-        standard_error = math.sqrt(max(probability * (1.0 - probability) / pseudo_n, 1e-6))
-        margin = 1.96 * standard_error
-        lower = max(0.0, probability - margin)
-        upper = min(1.0, probability + margin)
-        return (lower, upper)
+        clamped_prob = min(max(probability, 0.0), 1.0)
+
+        if sample_size <= 0:
+            return (clamped_prob, clamped_prob)
+
+        z = 1.96  # 95% confidence level
+        n = float(sample_size)
+        z_sq = z ** 2
+        denominator = 1.0 + z_sq / n
+        centre = clamped_prob + z_sq / (2.0 * n)
+        margin_term = math.sqrt((clamped_prob * (1.0 - clamped_prob) / n) + (z_sq / (4.0 * n ** 2)))
+        lower = (centre - z * margin_term) / denominator
+        upper = (centre + z * margin_term) / denominator
+
+        return (max(0.0, lower), min(1.0, upper))
     
     @staticmethod
     def _calculate_entropy(probabilities: torch.Tensor) -> torch.Tensor:
