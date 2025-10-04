@@ -2,7 +2,8 @@
 
 Combines text features from patient complaints with symptom graph relationships
 and exposes convenience helpers for ranked differential diagnosis generation.
-Requires transformers and torch-geometric to be properly installed.
+When ``use_pretrained`` is ``False`` the model falls back to a lightweight
+keyword-based encoder that does not require transformers or torch-geometric.
 """
 
 import math
@@ -15,25 +16,12 @@ import torch.nn.functional as F
 
 from ..data.icd_conditions import RespiratoryConditions
 from ..utils.model_loader import load_model_and_tokenizer, ModelDownloadError
+from .discriminator_lite import VocabularyFeatureExtractor
 
-# Enforce required dependencies
-try:
-    from transformers import AutoTokenizer, AutoModel
-except ImportError as e:
-    raise ImportError(
-        "transformers is required for DiagnosisDiscriminator. "
-        "Install with: pip install transformers==4.46.0\n"
-        "GPU Requirements: CUDA-capable GPU with 4GB+ VRAM recommended for full functionality. "
-        "CPU-only mode available but slower."
-    ) from e
-
-try:
-    from .gnn_module import SymptomGraphModule
-    HAS_GNN = True
-except ImportError:
-    HAS_GNN = False
-    # GNN is optional - will use MLP fallback
-    SymptomGraphModule = None
+# Optional dependencies are imported lazily to avoid heavy requirements when
+# using the lightweight fallback path. SymptomGraphModule will be loaded inside
+# the constructor only when requested.
+SymptomGraphModule = None
 
 
 class DiagnosisDiscriminator(nn.Module):
@@ -72,72 +60,102 @@ class DiagnosisDiscriminator(nn.Module):
             RuntimeError: If model loading fails
         """
         super().__init__()
-        
-        if not use_pretrained:
-            raise ValueError(
-                "DiagnosisDiscriminator requires use_pretrained=True. "
-                "Fallback encoder has been removed. "
-                "Ensure transformers and torch-geometric are properly installed."
-            )
-        
+
+        self.use_pretrained = use_pretrained
+        self.vocab_extractor: Optional[VocabularyFeatureExtractor] = None
+        self.tokenizer = None
+        self.text_encoder = None
+        self.gnn = None
+        self.graph_feature_dim = 0
+
         self.conditions = RespiratoryConditions.get_all_conditions()
         self.num_conditions = len(self.conditions)
         self.condition_codes = list(self.conditions.keys())
         self.keyword_index = self._build_keyword_index(self.conditions)
 
         RespiratoryConditions.register_reload_hook(self.reload_conditions)
-        
-        # Initialize text encoder (DeBERTa) with retry logic
-        try:
-            self.text_encoder, self.tokenizer = load_model_and_tokenizer(
-                model_name=model_name,
-                model_type="auto",
-                max_retries=3,
-                timeout=300
-            )
-            self.text_feature_dim = self.text_encoder.config.hidden_size  # 768 for base
-            
-            if freeze_encoder:
-                for param in self.text_encoder.parameters():
-                    param.requires_grad = False
-        except ModelDownloadError as e:
-            raise RuntimeError(
-                f"Failed to load text encoder {model_name}. "
-                f"{e}\n"
-                f"Requirements:\n"
-                f"- transformers==4.46.0\n"
-                f"- torch==2.5.1\n"
-                f"- Internet connection to download model from HuggingFace Hub"
-            ) from e
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to load text encoder {model_name}. "
-                f"Error: {e}\n"
-                f"Requirements:\n"
-                f"- transformers==4.46.0\n"
-                f"- torch==2.5.1\n"
-                f"- Internet connection to download model from HuggingFace Hub"
-            ) from e
-        
-        # Initialize GNN for symptom relationships
-        try:
-            self.gnn = SymptomGraphModule(
-                conditions=self.conditions,
-                hidden_dim=gnn_hidden_dim,
-                output_dim=gnn_output_dim,
-                dropout=dropout,
-                use_causal_edges=use_causal_edges
-            )
-            self.graph_feature_dim = gnn_output_dim
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to initialize GNN module. "
-                f"Error: {e}\n"
-                f"Requirements:\n"
-                f"- torch-geometric==2.6.1\n"
-                f"- torch==2.5.1"
-            ) from e
-        
+
+        if self.use_pretrained:
+            try:
+                from transformers import AutoModel, AutoTokenizer  # type: ignore
+            except ImportError as e:
+                raise ImportError(
+                    "transformers is required when use_pretrained=True. "
+                    "Install with: pip install transformers==4.46.0\n"
+                    "GPU Requirements: CUDA-capable GPU with 4GB+ VRAM recommended for full functionality. "
+                    "CPU-only mode available but slower."
+                ) from e
+
+            # Initialize text encoder (DeBERTa) with retry logic
+            try:
+                self.text_encoder, self.tokenizer = load_model_and_tokenizer(
+                    model_name=model_name,
+                    model_type="auto",
+                    max_retries=3,
+                    timeout=300
+                )
+                self.text_feature_dim = self.text_encoder.config.hidden_size  # 768 for base
+
+                if freeze_encoder:
+                    for param in self.text_encoder.parameters():
+                        param.requires_grad = False
+            except ModelDownloadError as e:
+                raise RuntimeError(
+                    f"Failed to load text encoder {model_name}. "
+                    f"{e}\n"
+                    f"Requirements:\n"
+                    f"- transformers==4.46.0\n"
+                    f"- torch==2.5.1\n"
+                    f"- Internet connection to download model from HuggingFace Hub"
+                ) from e
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to load text encoder {model_name}. "
+                    f"Error: {e}\n"
+                    f"Requirements:\n"
+                    f"- transformers==4.46.0\n"
+                    f"- torch==2.5.1\n"
+                    f"- Internet connection to download model from HuggingFace Hub"
+                ) from e
+
+            # Initialize GNN for symptom relationships lazily
+            global SymptomGraphModule
+            if SymptomGraphModule is None:
+                try:
+                    from .gnn_module import SymptomGraphModule as _SymptomGraphModule  # type: ignore
+                    SymptomGraphModule = _SymptomGraphModule
+                except ImportError as e:
+                    raise ImportError(
+                        "torch-geometric is required when use_pretrained=True to construct the GNN module. "
+                        "Install with: pip install torch-geometric==2.6.1"
+                    ) from e
+
+            try:
+                assert SymptomGraphModule is not None  # for type checkers
+                self.gnn = SymptomGraphModule(
+                    conditions=self.conditions,
+                    hidden_dim=gnn_hidden_dim,
+                    output_dim=gnn_output_dim,
+                    dropout=dropout,
+                    use_causal_edges=use_causal_edges
+                )
+                self.graph_feature_dim = gnn_output_dim
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to initialize GNN module. "
+                    f"Error: {e}\n"
+                    f"Requirements:\n"
+                    f"- torch-geometric==2.6.1\n"
+                    f"- torch==2.5.1"
+                ) from e
+        else:
+            # Lightweight keyword-matching encoder fallback. Provides a
+            # deterministic feature representation that keeps unit tests
+            # dependency-free while preserving downstream behaviour.
+            self.vocab_extractor = VocabularyFeatureExtractor(self.conditions)
+            self.text_feature_dim = self.num_conditions
+            self.graph_feature_dim = 0
+
         # Fusion layer (combines text + graph features)
         combined_dim = self.text_feature_dim + self.graph_feature_dim
         self.fusion_layer = nn.Sequential(
@@ -270,14 +288,24 @@ class DiagnosisDiscriminator(nn.Module):
     def encode_text(self, complaints: List[str]) -> torch.Tensor:
         """
         Encode text complaints to feature vectors using DeBERTa.
-        
+
         Args:
             complaints: List of patient complaint strings
-            
+
         Returns:
             Text features [batch_size, text_feature_dim]
         """
+        device = next(self.parameters()).device
+
+        if not self.use_pretrained:
+            assert self.vocab_extractor is not None
+            features = self.vocab_extractor.extract_features(complaints).to(device)
+            return features.float()
+
         try:
+            if self.tokenizer is None or self.text_encoder is None:
+                raise RuntimeError("Pretrained encoder not initialised.")
+
             inputs = self.tokenizer(
                 complaints,
                 padding=True,
@@ -285,32 +313,37 @@ class DiagnosisDiscriminator(nn.Module):
                 max_length=512,
                 return_tensors="pt"
             )
-            
+
             # Move to same device as model
-            inputs = {k: v.to(next(self.parameters()).device) for k, v in inputs.items()}
-            
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+
             with torch.set_grad_enabled(self.training):
                 outputs = self.text_encoder(**inputs)
                 # Use [CLS] token representation
                 text_features = outputs.last_hidden_state[:, 0, :]
-            
+
             return text_features
         except Exception as e:
             raise RuntimeError(
                 f"Error in DeBERTa encoding: {e}\n"
                 f"Ensure model is properly loaded and device has sufficient memory."
             ) from e
-    
+
     def get_graph_features(self, batch_size: int) -> torch.Tensor:
         """
         Get graph features for the batch.
-        
+
         Args:
             batch_size: Size of the batch
             
         Returns:
             Graph features [batch_size, graph_feature_dim]
         """
+        device = next(self.parameters()).device
+
+        if self.gnn is None or self.graph_feature_dim == 0:
+            return torch.zeros(batch_size, self.graph_feature_dim, device=device)
+
         return self.gnn(batch_size)
     
     def forward(
