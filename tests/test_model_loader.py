@@ -3,14 +3,11 @@ Test suite for robust model loader with retry mechanisms.
 Tests retry logic, exponential backoff, offline mode, and error handling.
 """
 
-import sys
 import time
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from phaita.utils.model_loader import (  # noqa: E402
     ModelDownloadError,

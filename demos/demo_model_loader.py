@@ -4,11 +4,7 @@ Demo script showing the robust model loader in action.
 This demonstrates the retry mechanism, offline mode, and error handling.
 """
 
-import sys
-from pathlib import Path
 
-# Add package to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from phaita.utils.model_loader import (
     robust_model_download,

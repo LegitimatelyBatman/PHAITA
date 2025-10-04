@@ -6,12 +6,9 @@ This demonstrates how the temporal module tracks symptom progression
 and uses pattern matching to improve diagnosis accuracy.
 """
 
-import sys
 from pathlib import Path
 import importlib.util
 
-# Add package to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import temporal module directly to avoid __init__ dependency issues
 def import_temporal_module():

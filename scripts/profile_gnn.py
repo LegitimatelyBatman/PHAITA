@@ -2,15 +2,14 @@
 """
 Profile GNN forward pass performance using torch.profiler.
 Identifies bottlenecks and saves detailed profiling results.
+
+Install the project in editable mode (``pip install -e .``) before running this
+script so that ``phaita`` imports resolve without manual path adjustments.
 """
 
 import os
-import sys
 import torch
 from torch.profiler import profile, ProfilerActivity, record_function
-
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from phaita.data.icd_conditions import RespiratoryConditions
 from phaita.models.gnn_module import SymptomGraphModule

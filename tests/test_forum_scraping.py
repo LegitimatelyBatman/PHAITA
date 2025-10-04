@@ -4,12 +4,9 @@ Test forum scraping and lay language mapping functionality.
 """
 
 import sys
-from pathlib import Path
 import tempfile
 import shutil
 
-# Add the package to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def test_forum_scraper():
     """Test forum scraping functionality."""

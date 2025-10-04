@@ -1,7 +1,3 @@
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 """Tests for the diagnosis orchestrator with red-flag integration."""
 
 from phaita.triage.diagnosis_orchestrator import DiagnosisOrchestrator, DiagnosisWithContext

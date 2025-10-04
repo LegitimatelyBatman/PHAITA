@@ -6,10 +6,7 @@ Tests causal edges, temporal edges, and edge type embeddings.
 
 import sys
 import torch
-from pathlib import Path
 
-# Add the package to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from phaita.data.icd_conditions import RespiratoryConditions
 from phaita.models.gnn_module import SymptomGraphBuilder, SymptomGraphModule

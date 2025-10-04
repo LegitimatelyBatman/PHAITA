@@ -555,6 +555,10 @@ When adding new tests to PHAITA:
 
 ### Example Test Structure
 
+Install the repository in editable mode (``pip install -e .``) before running
+tests locally. This makes the ``phaita`` package importable without modifying
+``sys.path`` in each file.
+
 ```python
 #!/usr/bin/env python3
 """
@@ -562,32 +566,30 @@ Test script for <feature>.
 <Brief description of what this test validates>
 """
 
-import sys
-from pathlib import Path
+from phaita.example import some_dependency
 
-# Add package to path
-sys.path.insert(0, str(Path(__file__).parent))
 
 def test_feature_one():
     """Test <specific aspect>."""
     print("🧪 Testing <aspect>...")
-    
+
     # Test logic here
     assert condition, "Clear failure message"
-    
+
     print("  ✓ <what passed>")
     return True
+
 
 def main():
     """Run all tests."""
     print("🏥 PHAITA <Feature> Test Suite")
     print("=" * 60)
-    
+
     tests = [
         ("Feature One", test_feature_one),
         ("Feature Two", test_feature_two),
     ]
-    
+
     passed = 0
     for name, test_fn in tests:
         try:
@@ -596,10 +598,10 @@ def main():
                 passed += 1
         except Exception as e:
             print(f"❌ {name} failed: {e}")
-    
+
     print("=" * 60)
     print(f"📊 Test Results: {passed}/{len(tests)} tests passed")
-    
+
     if passed == len(tests):
         print("🎉 All tests passed!")
         return 0
@@ -607,8 +609,9 @@ def main():
         print("❌ Some tests failed!")
         return 1
 
+
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
 ```
 
 ## Related Documentation
