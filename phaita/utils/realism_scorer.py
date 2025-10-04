@@ -12,6 +12,11 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple
 import logging
 from .model_loader import robust_model_download, ModelDownloadError
+from .dependency_versions import (
+    TRANSFORMERS_VERSION,
+    format_install_instruction,
+    format_transformer_requirements,
+)
 
 # Enforce required dependencies
 try:
@@ -20,7 +25,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "transformers is required for RealismScorer. "
-        "Install with: pip install transformers==4.46.0\n"
+        f"{format_install_instruction('transformers', TRANSFORMERS_VERSION)}\n"
         "GPU Requirements: CUDA-capable GPU with 4GB+ VRAM recommended for full functionality. "
         "CPU-only mode available but slower."
     ) from e
@@ -70,13 +75,13 @@ class RealismScorer:
                         continue
                 else:
                     # All preferred models failed - raise error
+                    requirements = format_transformer_requirements(
+                        internet_note="- Internet connection to download models from HuggingFace Hub"
+                    )
                     raise RuntimeError(
                         f"Failed to load any preferred medical model. Last error: {last_error}\n"
                         f"Attempted models: {medical_models}\n"
-                        f"Requirements:\n"
-                        f"- transformers==4.46.0\n"
-                        f"- torch==2.5.1\n"
-                        f"- Internet connection to download models from HuggingFace Hub"
+                        f"{requirements}"
                     )
             else:
                 self.tokenizer = robust_model_download(
@@ -116,12 +121,12 @@ class RealismScorer:
                 self.perplexity_model = self.perplexity_model.to(self.device)
                 self.perplexity_model.eval()
             except (ModelDownloadError, Exception) as e:
+                requirements = format_transformer_requirements(
+                    internet_note="- Internet connection to download models from HuggingFace Hub"
+                )
                 raise RuntimeError(
                     f"Failed to initialize perplexity model (gpt2): {e}\n"
-                    f"Requirements:\n"
-                    f"- transformers==4.46.0\n"
-                    f"- torch==2.5.1\n"
-                    f"- Internet connection to download model from HuggingFace Hub"
+                    f"{requirements}"
                 ) from e
 
         except Exception as e:

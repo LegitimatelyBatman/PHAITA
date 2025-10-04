@@ -16,6 +16,11 @@ import torch.nn.functional as F
 
 from ..data.icd_conditions import RespiratoryConditions
 from ..utils.model_loader import load_model_and_tokenizer, ModelDownloadError
+from ..utils.dependency_versions import (
+    TRANSFORMERS_VERSION,
+    format_install_instruction,
+    format_transformer_requirements,
+)
 from .discriminator_lite import VocabularyFeatureExtractor
 
 # Optional dependencies are imported lazily to avoid heavy requirements when
@@ -81,7 +86,7 @@ class DiagnosisDiscriminator(nn.Module):
             except ImportError as e:
                 raise ImportError(
                     "transformers is required when use_pretrained=True. "
-                    "Install with: pip install transformers==4.46.0\n"
+                    f"{format_install_instruction('transformers', TRANSFORMERS_VERSION)}\n"
                     "GPU Requirements: CUDA-capable GPU with 4GB+ VRAM recommended for full functionality. "
                     "CPU-only mode available but slower."
                 ) from e
@@ -100,22 +105,22 @@ class DiagnosisDiscriminator(nn.Module):
                     for param in self.text_encoder.parameters():
                         param.requires_grad = False
             except ModelDownloadError as e:
+                requirements = format_transformer_requirements(
+                    internet_note="- Internet connection to download model from HuggingFace Hub"
+                )
                 raise RuntimeError(
                     f"Failed to load text encoder {model_name}. "
                     f"{e}\n"
-                    f"Requirements:\n"
-                    f"- transformers==4.46.0\n"
-                    f"- torch==2.5.1\n"
-                    f"- Internet connection to download model from HuggingFace Hub"
+                    f"{requirements}"
                 ) from e
             except Exception as e:
+                requirements = format_transformer_requirements(
+                    internet_note="- Internet connection to download model from HuggingFace Hub"
+                )
                 raise RuntimeError(
                     f"Failed to load text encoder {model_name}. "
                     f"Error: {e}\n"
-                    f"Requirements:\n"
-                    f"- transformers==4.46.0\n"
-                    f"- torch==2.5.1\n"
-                    f"- Internet connection to download model from HuggingFace Hub"
+                    f"{requirements}"
                 ) from e
 
             # Initialize GNN for symptom relationships lazily
