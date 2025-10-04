@@ -12,6 +12,7 @@ import yaml
 
 from ..data.icd_conditions import RespiratoryConditions
 from ..models.bayesian_network import BayesianSymptomNetwork
+from ..utils.text import normalize_symptom
 
 
 @dataclass
@@ -127,7 +128,8 @@ class DialogueEngine:
         Returns:
             Normalized symptom name (lowercase, spaces only)
         """
-        return symptom.lower().replace('_', ' ').replace('-', ' ').strip()
+        # Use centralized normalization function
+        return normalize_symptom(symptom)
     
     def _load_temporal_patterns(self) -> Dict[str, Dict]:
         """Load temporal progression patterns from YAML config.

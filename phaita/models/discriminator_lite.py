@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 from typing import List, Dict, Optional
 from ..data.icd_conditions import RespiratoryConditions
+from ..utils.text import normalize_symptom
 
 try:
     from transformers import AutoModel, AutoTokenizer
@@ -33,8 +34,12 @@ class VocabularyFeatureExtractor:
         vocab = {}
         for code, data in self.conditions.items():
             symptoms = data['symptoms'] + data['severity_indicators'] + data['lay_terms']
-            # Flatten to word-level tokens
-            vocab[code] = [word.lower() for symptom in symptoms for word in symptom.split('_')]
+            # Normalize each symptom and extract word-level tokens
+            normalized_words = []
+            for symptom in symptoms:
+                normalized = normalize_symptom(symptom)
+                normalized_words.extend(normalized.split())
+            vocab[code] = normalized_words
         return vocab
     
     def extract_features(self, texts: List[str]) -> torch.Tensor:

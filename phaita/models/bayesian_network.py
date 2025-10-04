@@ -6,6 +6,7 @@ import random
 from typing import Dict, List, Optional
 
 from ..data.icd_conditions import RespiratoryConditions
+from ..utils.text import normalize_symptom
 
 
 class BayesianSymptomNetwork:
@@ -97,7 +98,7 @@ class BayesianSymptomNetwork:
             Probability (0.0 to 1.0)
         """
         # Normalize symptom for consistent matching
-        symptom = symptom.lower().replace('_', ' ').replace('-', ' ').strip()
+        symptom = normalize_symptom(symptom)
         
         if condition_code not in self.conditions:
             return 0.0
@@ -105,10 +106,8 @@ class BayesianSymptomNetwork:
         condition_data = self.conditions[condition_code]
         
         # Normalize condition symptoms for comparison
-        normalized_primary = [s.lower().replace('_', ' ').replace('-', ' ').strip() 
-                             for s in condition_data["symptoms"]]
-        normalized_severity = [s.lower().replace('_', ' ').replace('-', ' ').strip() 
-                              for s in condition_data["severity_indicators"]]
+        normalized_primary = [normalize_symptom(s) for s in condition_data["symptoms"]]
+        normalized_severity = [normalize_symptom(s) for s in condition_data["severity_indicators"]]
         
         if symptom in normalized_primary:
             return self.primary_symptom_prob

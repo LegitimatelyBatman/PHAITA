@@ -5,10 +5,12 @@ from __future__ import annotations
 from typing import Iterable, Mapping, Sequence
 
 from ..data.icd_conditions import RespiratoryConditions
+from ..utils.text import normalize_symptom_to_underscores
 
 
 def _normalize_symptom(symptom: str) -> str:
-    return symptom.strip().lower().replace(" ", "_")
+    # Use centralized normalization function for underscores format
+    return normalize_symptom_to_underscores(symptom)
 
 
 def _extract_from_text(text: str) -> list[str]:

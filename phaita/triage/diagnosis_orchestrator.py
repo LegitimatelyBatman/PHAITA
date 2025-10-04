@@ -11,6 +11,8 @@ from typing import Dict, List, Literal, Optional
 
 import yaml
 
+from ..utils.text import normalize_symptom
+
 
 @dataclass
 class DiagnosisWithContext:
@@ -151,7 +153,8 @@ class DiagnosisOrchestrator:
     @staticmethod
     def _normalize_symptom(symptom: str) -> str:
         """Normalize symptom string for comparison."""
-        return symptom.lower().replace("_", " ").replace("-", " ").strip()
+        # Use centralized normalization function
+        return normalize_symptom(symptom)
     
     def determine_escalation(
         self,
