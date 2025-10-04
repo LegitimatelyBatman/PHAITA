@@ -27,6 +27,7 @@ from phaita.conversation import ConversationEngine
 from phaita.models.question_generator import QuestionGenerator
 from phaita.triage import format_differential_report
 from phaita.triage.info_sheet import format_info_sheet
+from phaita.utils.text import normalize_symptom_to_underscores
 try:
     from phaita.models.enhanced_bayesian_network import create_enhanced_bayesian_network
     from phaita.data.forum_scraper import create_data_augmentation
@@ -122,7 +123,8 @@ def _get_diagnosis_discriminator() -> DiagnosisDiscriminator:
 
 
 def _normalize_symptom(symptom: str) -> str:
-    return symptom.strip().lower().replace(" ", "_")
+    # Use centralized normalization function for underscores format
+    return normalize_symptom_to_underscores(symptom)
 
 
 def _extract_symptoms_from_text(text: str) -> list:
