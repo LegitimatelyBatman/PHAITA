@@ -222,10 +222,10 @@ class TestModelLoader(unittest.TestCase):
     def test_kwargs_passed_to_from_pretrained(self):
         """Test that additional kwargs are passed through."""
         mock_model = Mock()
-        
+
         with patch('phaita.utils.model_loader.AutoModel') as mock_auto_model:
             mock_auto_model.from_pretrained = Mock(return_value=mock_model)
-            
+
             robust_model_download(
                 "test-model",
                 model_type="auto",
@@ -233,11 +233,57 @@ class TestModelLoader(unittest.TestCase):
                 device_map="auto",
                 torch_dtype="float16"
             )
-            
+
             # Check that custom kwargs were passed
             call_kwargs = mock_auto_model.from_pretrained.call_args[1]
             self.assertEqual(call_kwargs.get('device_map'), "auto")
             self.assertEqual(call_kwargs.get('torch_dtype'), "float16")
+
+    def test_token_keyword_forwarded_to_transformers(self):
+        """Token argument should be forwarded using the new keyword."""
+        mock_model = Mock()
+
+        with patch('phaita.utils.model_loader.AutoModel') as mock_auto_model:
+            mock_auto_model.from_pretrained = Mock(return_value=mock_model)
+
+            robust_model_download(
+                "test-model",
+                model_type="auto",
+                max_retries=1,
+                token="hf_secret"
+            )
+
+            call_kwargs = mock_auto_model.from_pretrained.call_args[1]
+            self.assertEqual(call_kwargs.get('token'), "hf_secret")
+            self.assertNotIn('use_auth_token', call_kwargs)
+
+    def test_token_forwarded_for_model_and_tokenizer(self):
+        """Token argument should be forwarded when loading both model and tokenizer."""
+        mock_model = Mock()
+        mock_tokenizer = Mock()
+
+        with patch('phaita.utils.model_loader.AutoModel') as mock_auto_model, \
+                patch('phaita.utils.model_loader.AutoTokenizer') as mock_auto_tokenizer:
+            mock_auto_model.from_pretrained = Mock(return_value=mock_model)
+            mock_auto_tokenizer.from_pretrained = Mock(return_value=mock_tokenizer)
+
+            model, tokenizer = load_model_and_tokenizer(
+                "test-model",
+                model_type="auto",
+                max_retries=1,
+                token="hf_secret"
+            )
+
+            self.assertEqual(model, mock_model)
+            self.assertEqual(tokenizer, mock_tokenizer)
+
+            model_kwargs = mock_auto_model.from_pretrained.call_args[1]
+            tokenizer_kwargs = mock_auto_tokenizer.from_pretrained.call_args[1]
+
+            self.assertEqual(model_kwargs.get('token'), "hf_secret")
+            self.assertEqual(tokenizer_kwargs.get('token'), "hf_secret")
+            self.assertNotIn('use_auth_token', model_kwargs)
+            self.assertNotIn('use_auth_token', tokenizer_kwargs)
 
 
 def run_tests():

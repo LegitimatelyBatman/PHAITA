@@ -88,7 +88,7 @@ def robust_model_download(
     max_retries: int = 3,
     timeout: int = 300,
     allow_offline: bool = False,
-    use_auth_token: Optional[str] = None,
+    token: Optional[str] = None,
     **kwargs
 ) -> Union[PreTrainedModel, PreTrainedTokenizer]:
     """
@@ -103,7 +103,7 @@ def robust_model_download(
         max_retries: Maximum number of retry attempts
         timeout: Timeout in seconds for each download attempt
         allow_offline: If True, only use cached models (no download)
-        use_auth_token: Optional HuggingFace authentication token
+        token: Optional HuggingFace authentication token
         **kwargs: Additional arguments to pass to from_pretrained()
         
     Returns:
@@ -145,8 +145,8 @@ def robust_model_download(
     }
     
     # Add auth token if provided
-    if use_auth_token:
-        load_kwargs["use_auth_token"] = use_auth_token
+    if token:
+        load_kwargs["token"] = token
     
     # If offline mode or cached, try to load from cache first
     if allow_offline or is_cached:
@@ -226,7 +226,7 @@ def load_model_and_tokenizer(
     max_retries: int = 3,
     timeout: int = 300,
     allow_offline: bool = False,
-    use_auth_token: Optional[str] = None,
+    token: Optional[str] = None,
     **model_kwargs
 ) -> Tuple[PreTrainedModel, PreTrainedTokenizer]:
     """
@@ -238,7 +238,7 @@ def load_model_and_tokenizer(
         max_retries: Maximum number of retry attempts
         timeout: Timeout in seconds for each download attempt
         allow_offline: If True, only use cached models
-        use_auth_token: Optional HuggingFace authentication token
+        token: Optional HuggingFace authentication token
         **model_kwargs: Additional arguments for model loading
         
     Returns:
@@ -254,7 +254,7 @@ def load_model_and_tokenizer(
         max_retries=max_retries,
         timeout=timeout,
         allow_offline=allow_offline,
-        use_auth_token=use_auth_token,
+        token=token,
     )
     
     # Then load the model
@@ -264,7 +264,7 @@ def load_model_and_tokenizer(
         max_retries=max_retries,
         timeout=timeout,
         allow_offline=allow_offline,
-        use_auth_token=use_auth_token,
+        token=token,
         **model_kwargs
     )
     

@@ -104,7 +104,7 @@ model = robust_model_download(
 | `max_retries` | int | 3 | Maximum number of retry attempts |
 | `timeout` | int | 300 | Timeout in seconds for each attempt |
 | `allow_offline` | bool | False | Only use cached models (no download) |
-| `use_auth_token` | str | None | HuggingFace authentication token |
+| `token` | str | None | HuggingFace authentication token |
 | `**kwargs` | Any | - | Additional arguments passed to `from_pretrained()` |
 
 ## Integration with PHAITA
