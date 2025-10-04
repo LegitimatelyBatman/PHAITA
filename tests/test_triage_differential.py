@@ -71,3 +71,15 @@ def test_lightweight_path_produces_ranked_differential_without_downloads():
     probs = [entry["probability"] for entry in ranked]
     assert all(0.0 <= p <= 1.0 for p in probs)
     assert probs == sorted(probs, reverse=True)
+
+
+def test_wilson_interval_respects_sample_size():
+    probability = 0.7
+
+    low_sample_interval = DiagnosisDiscriminator._estimate_confidence_interval(probability, sample_size=5)
+    high_sample_interval = DiagnosisDiscriminator._estimate_confidence_interval(probability, sample_size=200)
+    degenerate_interval = DiagnosisDiscriminator._estimate_confidence_interval(probability, sample_size=0)
+
+    assert low_sample_interval[0] < probability < low_sample_interval[1]
+    assert high_sample_interval[1] - high_sample_interval[0] < low_sample_interval[1] - low_sample_interval[0]
+    assert degenerate_interval == (probability, probability)
