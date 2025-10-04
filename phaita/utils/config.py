@@ -12,7 +12,7 @@ import os
 class ModelConfig:
     """Configuration for model architectures."""
     deberta_model: str = "microsoft/deberta-base"
-    mistral_model: str = "mistralai/Mistral-7B-Instruct-v0.1"
+    mistral_model: str = "mistralai/Mistral-7B-Instruct-v0.2"
     gnn_hidden_dim: int = 128
     gnn_num_layers: int = 3
     use_quantization: bool = True
