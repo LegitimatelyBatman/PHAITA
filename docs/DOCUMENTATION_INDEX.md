@@ -12,6 +12,14 @@ Complete guide to all PHAITA documentation.
 - Python API examples
 - **Start here for new users**
 
+### [INSTALLATION.md](../INSTALLATION.md)
+**Detailed installation guide** - Complete instructions for all installation methods.
+- Modular installation options (CPU-only, GPU, development, scraping)
+- Requirements files explanation (base, gpu, dev, scraping)
+- Use case-specific installation instructions
+- Troubleshooting and compatibility notes
+- Migration guide from old installation method
+
 ### [PROJECT_SUMMARY.md](../PROJECT_SUMMARY.md)
 **Problem statement and vision** - Why PHAITA exists and where it's going.
 - Medical triage problem statement

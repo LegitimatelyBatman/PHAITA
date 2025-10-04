@@ -5,7 +5,20 @@ This guide captures the essentials for running PHAITA with the full deep-learnin
 ## Prerequisites
 - Python 3.10+
 - GPU with ≥4GB VRAM for quantised Mistral 7B (CPU mode available with templates only).
-- Packages from `requirements.txt`; install extras with `pip install torch transformers bitsandbytes` if not already present.
+- **GPU Installation**: Install with GPU extras for full deep-learning features:
+  ```bash
+  pip install -e .[gpu,dev]
+  # or
+  pip install -r requirements-base.txt
+  pip install -r requirements-gpu.txt
+  pip install -r requirements-dev.txt
+  ```
+  
+  This installs:
+  - `bitsandbytes==0.44.1` for 4-bit quantization (requires CUDA)
+  - `torch-geometric==2.6.1` for Graph Neural Networks
+  
+  See [INSTALLATION.md](INSTALLATION.md) for complete installation guide.
 
 ## Enabling the Full Stack
 ```python

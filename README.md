@@ -9,6 +9,9 @@ PHAITA is a research prototype for medical triage that pits a language-model com
 - **Goal**: Stress-test diagnostic models with challenging, human-like complaints.
 - **Status**: Production-ready deep-learning pipeline requiring GPU acceleration and transformer models.
 
+📦 **[Installation Guide](INSTALLATION.md)** - Detailed instructions for all installation methods (CPU-only, GPU, development, etc.)  
+⚡ **[Quick Reference](INSTALL_QUICK_REF.md)** - One-line install commands and quick decision tree
+
 ## System Requirements
 
 ### Hardware Requirements
