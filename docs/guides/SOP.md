@@ -485,7 +485,7 @@ python tests/test_diagnosis_orchestrator.py
 python tests/test_escalation_guidance.py
 
 # Model tests
-python tests/test_model_loader.py
+pytest tests/test_model_loader.py
 python tests/test_gnn_performance.py
 
 # Integration tests (slow, requires network)

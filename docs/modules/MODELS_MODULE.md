@@ -421,7 +421,7 @@ models:
 ```bash
 python tests/test_basic.py
 python tests/test_enhanced_bayesian.py
-python tests/test_model_loader.py
+pytest tests/test_model_loader.py
 ```
 
 ---
