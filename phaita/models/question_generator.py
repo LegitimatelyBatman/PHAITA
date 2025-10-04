@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Set
 import random
 import torch
 import torch.nn as nn
+from requests.exceptions import HTTPError
 from ..utils.model_loader import load_model_and_tokenizer, ModelDownloadError
 from ..utils.config import ModelConfig
 
@@ -139,7 +140,7 @@ class QuestionGenerator(nn.Module):
                 f"- CUDA GPU with 4GB+ VRAM recommended (CPU mode available with use_4bit=False)\n"
                 f"- Internet connection to download model from HuggingFace Hub"
             ) from e
-        except Exception as e:
+        except (OSError, ValueError, HTTPError) as e:
             raise RuntimeError(
                 f"Failed to load model {model_name}. "
                 f"Error: {e}\n"
