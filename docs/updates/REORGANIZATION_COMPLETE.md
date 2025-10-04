@@ -63,9 +63,9 @@ python cli.py demo --num-examples 5
 ### Documentation
 
 Start here:
-- **[docs/guides/SOP.md](docs/guides/SOP.md)** - Complete guide for everything
-- **[docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md)** - Navigation hub
-- **[docs/updates/REORGANIZATION_SUMMARY.md](docs/updates/REORGANIZATION_SUMMARY.md)** - Detailed changes
+- **[docs/guides/SOP.md](../guides/SOP.md)** - Complete guide for everything
+- **[docs/DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md)** - Navigation hub
+- **[docs/updates/REORGANIZATION_SUMMARY.md](REORGANIZATION_SUMMARY.md)** - Detailed changes
 
 ## Migration Notes
 
@@ -110,9 +110,9 @@ All components verified working:
 ## Questions?
 
 See:
-- [docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md) - Complete documentation guide
-- [docs/updates/REORGANIZATION_SUMMARY.md](docs/updates/REORGANIZATION_SUMMARY.md) - Detailed summary
-- [docs/guides/SOP.md](docs/guides/SOP.md) - Standard Operating Procedure
+- [docs/DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md) - Complete documentation guide
+- [docs/updates/REORGANIZATION_SUMMARY.md](REORGANIZATION_SUMMARY.md) - Detailed summary
+- [docs/guides/SOP.md](../guides/SOP.md) - Standard Operating Procedure
 
 ---
 

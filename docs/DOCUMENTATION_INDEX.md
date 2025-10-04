@@ -227,11 +227,12 @@ Complete guide to all PHAITA documentation.
 4. [TESTING_MULTI_TURN_DIALOGUES.md](TESTING_MULTI_TURN_DIALOGUES.md) - Test examples
 
 #### Customize medical knowledge
-1. Edit: `config/respiratory_conditions.yaml`
-2. Edit: `config/red_flags.yaml`
-3. Edit: `config/comorbidity_effects.yaml`
-4. Edit: `config/symptom_causality.yaml`
-5. See: [docs/modules/DATA_MODULE.md](modules/DATA_MODULE.md) - Configuration guide
+1. [docs/guides/PHYSICIAN_CONFIGURATION_GUIDE.md](guides/PHYSICIAN_CONFIGURATION_GUIDE.md) - Step-by-step guide for physicians
+2. Edit: `config/respiratory_conditions.yaml`
+3. Edit: `config/red_flags.yaml`
+4. Edit: `config/comorbidity_effects.yaml`
+5. Edit: `config/symptom_causality.yaml`
+6. See: [docs/modules/DATA_MODULE.md](modules/DATA_MODULE.md) - Configuration guide
 
 #### Add new features
 1. [docs/modules/IMPLEMENTATION_SUMMARY.md](modules/IMPLEMENTATION_SUMMARY.md) - Module organization
@@ -277,9 +278,12 @@ Complete guide to all PHAITA documentation.
 
 #### Guides (docs/guides/) ⭐ **NEW**
 - docs/guides/SOP.md - Complete Standard Operating Procedure
+- docs/guides/PHYSICIAN_CONFIGURATION_GUIDE.md - Configuration guide for physicians
 
 #### Updates (docs/updates/) ⭐ **NEW**
 - docs/updates/UPDATE_LOG.md - Consolidated update history
+- docs/updates/REORGANIZATION_COMPLETE.md - Repository reorganization summary
+- docs/updates/REORGANIZATION_SUMMARY.md - Detailed reorganization changes
 
 #### Architecture Documentation (docs/architecture/)
 - docs/architecture/DIALOGUE_ENGINE.md
@@ -339,9 +343,12 @@ All demo files (10 total) now in `demos/` directory:
 
 ### Guides ⭐ **NEW**
 - ✅ docs/guides/SOP.md - **NEW** comprehensive Standard Operating Procedure
+- ✅ docs/guides/PHYSICIAN_CONFIGURATION_GUIDE.md - Configuration guide for physicians
 
 ### Updates ⭐ **NEW**
 - ✅ docs/updates/UPDATE_LOG.md - **NEW** consolidated update history
+- ✅ docs/updates/REORGANIZATION_COMPLETE.md - **MOVED** from root
+- ✅ docs/updates/REORGANIZATION_SUMMARY.md - Detailed reorganization changes
 - 🗑️ NORMALIZATION_FIX_SUMMARY.md - **REMOVED** (consolidated)
 - 🗑️ VERIFICATION_REPORT.md - **REMOVED** (consolidated)
 
