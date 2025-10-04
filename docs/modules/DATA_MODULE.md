@@ -157,36 +157,52 @@ symptoms = extract_symptoms("I have chest pain and shortness of breath")
 
 ### 5. Red Flags (`red_flags.py`)
 
-**Purpose:** Define and manage red-flag symptoms that require immediate medical attention.
+**Purpose:** Load and provide access to red-flag symptoms that require immediate medical attention.
 
-**Key Class:** `RedFlagRegistry`
+**Configuration:** Red flag definitions are stored in `config/red_flags.yaml` for easy clinician updates.
+
+**Key Export:** `RESPIRATORY_RED_FLAGS`
 
 **Features:**
-- Condition-specific red flags
-- Severity levels
-- Emergency escalation criteria
-- Clinical guidance messaging
+- Condition-specific red flags (technical names for matching)
+- Human-readable symptom descriptions (for display)
+- Emergency escalation guidance text
+- Loaded from YAML configuration at import time
 
 **Usage:**
 ```python
-from phaita.data.red_flags import RedFlagRegistry
-
-registry = RedFlagRegistry()
+from phaita.data.red_flags import RESPIRATORY_RED_FLAGS
 
 # Get red flags for condition
-red_flags = registry.get_red_flags("J45.9")
+condition_data = RESPIRATORY_RED_FLAGS.get("J45.9", {})
 
-# Check if symptom is red flag
-is_emergency = registry.is_red_flag("severe_respiratory_distress")
+# Access technical red-flag names (for matching)
+red_flags = condition_data.get("red_flags", [])
+# ['severe_respiratory_distress', 'unable_to_speak_full_sentences', ...]
 
-# Get guidance
-guidance = registry.get_guidance("severe_respiratory_distress")
+# Access human-readable symptoms (for display)
+symptoms = condition_data.get("symptoms", [])
+# ['inability to speak more than a few words', 'bluish lips or fingernails', ...]
+
+# Get escalation guidance
+escalation_text = condition_data.get("escalation", "")
+# "Use a rescue inhaler immediately and seek emergency care..."
 ```
 
-**Red Flag Categories:**
-1. **Critical** - Immediate emergency care (call 911)
-2. **Urgent** - Seek care within hours
-3. **Concerning** - Seek care within 24 hours
+**YAML Configuration Structure:**
+```yaml
+J45.9:  # Asthma
+  red_flags:
+    - severe_respiratory_distress
+    - unable_to_speak_full_sentences
+  symptoms:
+    - inability to speak more than a few words
+    - bluish lips or fingernails
+  escalation: Use a rescue inhaler immediately...
+```
+
+**Clinician Updates:**
+Clinicians can update red flag definitions by editing `config/red_flags.yaml` without modifying Python code. Changes take effect on next import/restart.
 
 ---
 
@@ -283,32 +299,30 @@ print(f"Generated {len(training_data)} training examples")
 ### Example 2: Check for Red Flags
 
 ```python
-from phaita.data.red_flags import RedFlagRegistry
-from phaita.data.preprocessing import extract_symptoms
+from phaita.data.red_flags import RESPIRATORY_RED_FLAGS
 
-registry = RedFlagRegistry()
+# Patient complaint with detected symptoms
+detected_symptoms = ["severe_respiratory_distress", "wheezing", "cough"]
 
-# Patient complaint
-complaint = "I have severe chest pain and can't breathe"
+# Check for red flags for asthma (J45.9)
+condition_code = "J45.9"
+condition_data = RESPIRATORY_RED_FLAGS.get(condition_code, {})
 
-# Extract symptoms
-symptoms = extract_symptoms(complaint)
+# Get red-flag definitions (technical names)
+red_flag_list = condition_data.get("red_flags", [])
 
-# Check for red flags
-red_flags = []
-for symptom in symptoms:
-    if registry.is_red_flag(symptom):
-        guidance = registry.get_guidance(symptom)
-        red_flags.append({
-            "symptom": symptom,
-            "severity": guidance["severity"],
-            "action": guidance["action"]
-        })
+# Check which red flags are present
+present_red_flags = [rf for rf in red_flag_list if rf in detected_symptoms]
 
-if red_flags:
+if present_red_flags:
     print("⚠️ RED FLAGS DETECTED:")
-    for flag in red_flags:
-        print(f"  - {flag['symptom']}: {flag['action']}")
+    # Get human-readable symptoms
+    symptoms = condition_data.get("symptoms", [])
+    print(f"  Symptoms: {', '.join(symptoms)}")
+    
+    # Get escalation guidance
+    escalation = condition_data.get("escalation", "")
+    print(f"  🚑 Escalation: {escalation}")
 ```
 
 ---
@@ -320,12 +334,14 @@ if red_flags:
 - ✅ Normalize symptoms before matching
 - ✅ Check red flags on every patient input
 - ✅ Generate diverse training data with various severities
+- ✅ Edit `config/red_flags.yaml` to update red flag definitions (clinician-friendly)
 
 ### DON'T:
 - ❌ Hardcode condition or symptom data
 - ❌ Skip normalization - causes matching failures
 - ❌ Ignore red flags - patient safety critical
 - ❌ Use PII from forum data without anonymization
+- ❌ Edit `phaita/data/red_flags.py` - use YAML config instead
 
 ---
 
