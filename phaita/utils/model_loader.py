@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Optional, Union, Tuple, Any
 import hashlib
 
+from .dependency_versions import TRANSFORMERS_VERSION, format_install_instruction
+
 try:
     from transformers import (
         AutoTokenizer,
@@ -22,7 +24,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "transformers is required for model_loader. "
-        "Install with: pip install transformers==4.46.0"
+        f"{format_install_instruction('transformers', TRANSFORMERS_VERSION)}"
     ) from e
 
 try:

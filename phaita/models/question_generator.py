@@ -11,6 +11,11 @@ import torch.nn as nn
 from requests.exceptions import HTTPError
 from ..utils.model_loader import load_model_and_tokenizer, ModelDownloadError
 from ..utils.config import ModelConfig
+from ..utils.dependency_versions import (
+    TRANSFORMERS_VERSION,
+    format_install_instruction,
+    format_transformer_requirements,
+)
 
 # Enforce required dependencies
 try:
@@ -18,7 +23,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "transformers is required for QuestionGenerator. "
-        "Install with: pip install transformers==4.46.0\n"
+        f"{format_install_instruction('transformers', TRANSFORMERS_VERSION)}\n"
         "GPU Requirements: CUDA-capable GPU with 4GB+ VRAM recommended for full functionality. "
         "CPU-only mode available but slower."
     ) from e
@@ -130,26 +135,26 @@ class QuestionGenerator(nn.Module):
             self.model.eval()
             print(f"✓ Loaded {model_name} successfully")
         except ModelDownloadError as e:
+            requirements = format_transformer_requirements(
+                include_bitsandbytes=True,
+                include_cuda_note=True,
+                internet_note="- Internet connection to download model from HuggingFace Hub",
+            )
             raise RuntimeError(
                 f"Failed to load model {model_name}. "
                 f"{e}\n"
-                f"Requirements:\n"
-                f"- transformers==4.46.0\n"
-                f"- bitsandbytes==0.44.1 (for 4-bit quantization)\n"
-                f"- torch==2.5.1\n"
-                f"- CUDA GPU with 4GB+ VRAM recommended (CPU mode available with use_4bit=False)\n"
-                f"- Internet connection to download model from HuggingFace Hub"
+                f"{requirements}"
             ) from e
         except (OSError, ValueError, HTTPError) as e:
+            requirements = format_transformer_requirements(
+                include_bitsandbytes=True,
+                include_cuda_note=True,
+                internet_note="- Internet connection to download model from HuggingFace Hub",
+            )
             raise RuntimeError(
                 f"Failed to load model {model_name}. "
                 f"Error: {e}\n"
-                f"Requirements:\n"
-                f"- transformers==4.46.0\n"
-                f"- bitsandbytes==0.44.1 (for 4-bit quantization)\n"
-                f"- torch==2.5.1\n"
-                f"- CUDA GPU with 4GB+ VRAM recommended (CPU mode available with use_4bit=False)\n"
-                f"- Internet connection to download model from HuggingFace Hub"
+                f"{requirements}"
             ) from e
     
     def _create_question_prompt(
