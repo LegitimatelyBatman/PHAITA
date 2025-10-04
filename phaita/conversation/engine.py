@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Deque, Dict, Iterable, List, Optional, Sequence, Set
 
 from ..triage.question_strategy import ExpectedInformationGainStrategy
+from ..utils.text import normalize_symptom_to_underscores
 
 
 @dataclass
@@ -68,7 +69,8 @@ class ConversationEngine:
         for symptom in symptoms:
             if not symptom:
                 continue
-            normalized = symptom.strip().lower().replace(" ", "_")
+            # Normalize symptom name to underscores format
+            normalized = normalize_symptom_to_underscores(symptom)
             if not normalized:
                 continue
             if normalized not in self._symptom_set:
