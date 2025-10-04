@@ -1,0 +1,15 @@
+# GPU-specific dependencies for full deep learning functionality
+# Required for 4-bit quantization and Graph Neural Networks
+
+# Install base requirements first:
+# pip install -r requirements-base.txt
+
+# 4-bit Model Quantization (requires CUDA)
+bitsandbytes==0.44.1
+
+# Graph Neural Networks
+torch-geometric==2.6.1
+
+# Optional for advanced GNN features (commented out by default)
+# torch-scatter>=2.1.0
+# torch-sparse>=0.6.17

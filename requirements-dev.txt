@@ -1,0 +1,7 @@
+# Development dependencies for testing and code quality
+
+# Install base requirements first:
+# pip install -r requirements-base.txt
+
+# Testing Framework
+pytest>=7.0

@@ -1,0 +1,27 @@
+# Core dependencies required for basic PHAITA functionality
+# These are required for CPU-only operation with template-based fallbacks
+
+# Deep Learning Framework
+torch==2.5.1
+
+# NLP and Model Loading
+transformers==4.46.0
+datasets>=2.10.0
+accelerate>=0.20.0
+
+# Data Processing and Analysis
+networkx>=3.0
+scikit-learn>=1.3.0
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+
+# Utilities
+tqdm>=4.65.0
+pyyaml>=6.0
+safetensors>=0.3.0
+requests>=2.31.0
+
+# Visualization (for metrics and analysis)
+seaborn>=0.12.0
+matplotlib>=3.7.0

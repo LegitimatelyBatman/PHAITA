@@ -1,0 +1,10 @@
+# Optional dependencies for web scraping and forum data collection
+
+# Install base requirements first:
+# pip install -r requirements-base.txt
+
+# Reddit API for forum scraping
+praw>=7.7.0
+
+# HTML parsing for web scraping
+beautifulsoup4>=4.12.0
