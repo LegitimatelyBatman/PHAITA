@@ -75,6 +75,10 @@ class DataPreprocessor:
         for name in vocab.get('condition_names', []):
             self.medical_terms.add(name.lower())
         
+        # Add common severity adjectives (useful for categorization)
+        severity_adjectives = ["severe", "moderate", "mild", "acute", "chronic"]
+        self.medical_terms.update(severity_adjectives)
+        
         # Add common timing terms (still useful for categorization)
         timing_terms = ["sudden", "gradual", "intermittent", "constant", "persistent"]
         self.medical_terms.update(timing_terms)
