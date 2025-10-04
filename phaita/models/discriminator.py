@@ -637,29 +637,16 @@ class DiagnosisDiscriminator(nn.Module):
                 'confidence_level': 'high'
             }
         """
-        # Enable dropout for uncertainty estimation
+        # Use internal MC dropout sampling method
         was_training = self.training
-        self.train()  # Enable dropout layers
+        mean_probs, std_probs = self._mc_dropout_sample(complaints, num_samples)
         
-        all_predictions = []
+        # Restore original training state if needed
+        # (_mc_dropout_sample always sets to eval, so restore training if needed)
+        if was_training:
+            self.train()
         
-        # Perform multiple forward passes with dropout
-        for _ in range(num_samples):
-            with torch.no_grad():
-                outputs = self(complaints, return_features=False)
-                probs = F.softmax(outputs['diagnosis_logits'], dim=-1)
-                all_predictions.append(probs)
-        
-        # Restore original training state
-        if not was_training:
-            self.eval()
-        
-        # Compute statistics across MC samples
-        predictions_tensor = torch.stack(all_predictions)  # [num_samples, batch, num_conditions]
-        mean_probs = predictions_tensor.mean(dim=0)  # [batch, num_conditions]
-        std_probs = predictions_tensor.std(dim=0)    # [batch, num_conditions]
-        
-        # Convert to list of results
+        # Convert to list of results with user-friendly format
         batch_results = []
         for batch_idx in range(len(complaints)):
             # Get all conditions with their stats
