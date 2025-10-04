@@ -9,11 +9,7 @@ This demo shows how comorbidities affect symptom presentations, including:
 4. Cross-condition interactions (e.g., Asthma + COPD = ACOS)
 """
 
-import sys
-from pathlib import Path
 
-# Add the package to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from phaita.models.enhanced_bayesian_network import create_enhanced_bayesian_network
 

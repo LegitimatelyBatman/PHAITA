@@ -18,6 +18,7 @@ setup(
     version="0.1.0",
     description="Pre-Hospital AI Triage Algorithm with Adversarial Training",
     packages=find_packages(),
+    py_modules=["cli", "patient_cli"],
     install_requires=read_requirements(),
     python_requires=">=3.8",
 )

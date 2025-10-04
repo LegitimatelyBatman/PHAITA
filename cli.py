@@ -2,6 +2,9 @@
 """
 PHAITA CLI - Command line interface for Pre-Hospital AI Triage Algorithm
 Enhanced with user diagnosis testing and adversarial challenge mode.
+
+Install the project in editable mode (``pip install -e .``) before running the
+CLI so that ``phaita`` can be imported without manual path modifications.
 """
 
 import argparse
@@ -11,10 +14,6 @@ import random
 import sys
 import textwrap
 from functools import lru_cache
-from pathlib import Path
-
-# Add the package to Python path
-sys.path.insert(0, str(Path(__file__).parent))
 
 from phaita import (
     AdversarialTrainer,

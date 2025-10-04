@@ -11,13 +11,10 @@ For lightweight tests that don't require models, see test_basic.py and test_conv
 """
 
 import json
-import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
-# Add package to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from phaita.training.adversarial_trainer import AdversarialTrainer
 from phaita.models.generator import SymptomGenerator, ComplaintGenerator

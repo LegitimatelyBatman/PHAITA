@@ -1,7 +1,3 @@
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 """Tests for triage differential formatting and guidance."""
 
 from phaita.models.discriminator import DiagnosisDiscriminator

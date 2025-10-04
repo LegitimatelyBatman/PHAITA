@@ -1,7 +1,3 @@
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 """End-to-end integration test for complete triage workflow.
 
 Simulates: Patient complaint → Dialogue questions → Final diagnosis → Escalation guidance

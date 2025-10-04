@@ -4,11 +4,7 @@ Demo script showcasing the critical bug fixes in PHAITA.
 Demonstrates all four tasks working together.
 """
 
-import sys
-from pathlib import Path
 
-# Add package to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from phaita.training.adversarial_trainer import AdversarialTrainer
 from phaita.models.generator import SymptomGenerator, ComplaintGenerator

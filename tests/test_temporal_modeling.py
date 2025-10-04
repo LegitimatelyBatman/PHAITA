@@ -9,8 +9,6 @@ from pathlib import Path
 import traceback
 import importlib.util
 
-# Add the package to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def import_module_from_file(module_name, file_path):

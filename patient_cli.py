@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Interactive CLI for the patient simulator."""
+"""Interactive CLI for the patient simulator.
+
+Install the project in editable mode (``pip install -e .``) before running the
+CLI so that ``phaita`` imports resolve without manual path tweaks.
+"""
 
 from __future__ import annotations
 
 import argparse
 import random
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
-
-# Ensure the package can be imported when running from the repository root
-sys.path.insert(0, str(Path(__file__).parent))
 
 from phaita.data.icd_conditions import RespiratoryConditions
 from phaita.generation.patient_agent import PatientPresentation, PatientSimulator

@@ -1,7 +1,3 @@
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 """Regression tests for the conversation engine's triage flow.
 
 Note: This test suite uses stub generators and does NOT require real transformer models.

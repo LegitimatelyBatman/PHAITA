@@ -9,11 +9,8 @@ For tests requiring real models, see test_integration.py.
 """
 
 import sys
-from pathlib import Path
 import traceback
 
-# Add the package to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def test_data_layer():
