@@ -52,3 +52,22 @@ def test_predict_with_explanation_returns_matched_keywords():
     assert matched_keywords, "Expected at least one matched keyword in explanation"
     for keyword in matched_keywords:
         assert keyword in complaint.lower()
+
+
+def test_lightweight_path_produces_ranked_differential_without_downloads():
+    model = DiagnosisDiscriminator(use_pretrained=False)
+
+    assert model.vocab_extractor is not None
+    assert model.gnn is None
+
+    complaint = "shortness of breath and wheezing after mild exercise"
+
+    differential = model.predict_diagnosis([complaint], top_k=3)
+    assert len(differential) == 1
+    ranked = differential[0]
+    assert len(ranked) == 3
+
+    # Ensure probabilities form a proper distribution for the returned slice
+    probs = [entry["probability"] for entry in ranked]
+    assert all(0.0 <= p <= 1.0 for p in probs)
+    assert probs == sorted(probs, reverse=True)
