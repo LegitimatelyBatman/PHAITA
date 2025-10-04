@@ -198,61 +198,88 @@ Complete guide to all PHAITA documentation.
 
 #### Get started with PHAITA
 1. [README.md](../README.md) - Installation and quick start
-2. [PROJECT_SUMMARY.md](../PROJECT_SUMMARY.md) - Understand the vision
-3. [TESTING.md](TESTING.md) - Run tests to verify installation
+2. [docs/guides/SOP.md](guides/SOP.md) - Complete Standard Operating Procedure
+3. [PROJECT_SUMMARY.md](../PROJECT_SUMMARY.md) - Understand the vision
+4. [TESTING.md](TESTING.md) - Run tests to verify installation
 
 #### Understand the architecture
-1. [IMPLEMENTATION_SUMMARY.md](../IMPLEMENTATION_SUMMARY.md) - High-level overview
-2. [IMPLEMENTATION_DETAILS.md](../IMPLEMENTATION_DETAILS.md) - Deep-learning details
-3. [docs/architecture/DIALOGUE_ENGINE.md](architecture/DIALOGUE_ENGINE.md) - Conversation system
+1. [docs/modules/IMPLEMENTATION_SUMMARY.md](modules/IMPLEMENTATION_SUMMARY.md) - High-level overview
+2. [docs/modules/IMPLEMENTATION_DETAILS.md](modules/IMPLEMENTATION_DETAILS.md) - Deep-learning details
+3. [docs/modules/DATA_MODULE.md](modules/DATA_MODULE.md) - Data layer
+4. [docs/modules/MODELS_MODULE.md](modules/MODELS_MODULE.md) - Neural networks
+5. [docs/modules/CONVERSATION_MODULE.md](modules/CONVERSATION_MODULE.md) - Dialogue system
+6. [docs/modules/TRIAGE_MODULE.md](modules/TRIAGE_MODULE.md) - Diagnosis and red-flags
 
 #### Set up deep learning models
 1. [DEEP_LEARNING_GUIDE.md](../DEEP_LEARNING_GUIDE.md) - GPU setup and troubleshooting
 2. [docs/features/MODEL_LOADER_GUIDE.md](features/MODEL_LOADER_GUIDE.md) - Model loading utilities
-3. [README.md](../README.md) - System requirements
+3. [docs/guides/SOP.md](guides/SOP.md) - Training procedures
+
+#### Train models
+1. [docs/guides/SOP.md](guides/SOP.md) - Complete training guide
+2. [DEEP_LEARNING_GUIDE.md](../DEEP_LEARNING_GUIDE.md) - GPU requirements
+3. [docs/modules/MODELS_MODULE.md](modules/MODELS_MODULE.md) - Model architecture
 
 #### Work with the dialogue system
-1. [docs/architecture/DIALOGUE_ENGINE.md](architecture/DIALOGUE_ENGINE.md) - Architecture and API
-2. [docs/architecture/DIAGNOSIS_ORCHESTRATOR_README.md](architecture/DIAGNOSIS_ORCHESTRATOR_README.md) - Red-flags and escalation
-3. [TESTING_MULTI_TURN_DIALOGUES.md](TESTING_MULTI_TURN_DIALOGUES.md) - Test examples
+1. [docs/modules/CONVERSATION_MODULE.md](modules/CONVERSATION_MODULE.md) - Dialogue engine guide
+2. [docs/architecture/DIALOGUE_ENGINE.md](architecture/DIALOGUE_ENGINE.md) - Architecture details
+3. [docs/modules/TRIAGE_MODULE.md](modules/TRIAGE_MODULE.md) - Diagnosis orchestration
+4. [TESTING_MULTI_TURN_DIALOGUES.md](TESTING_MULTI_TURN_DIALOGUES.md) - Test examples
 
 #### Customize medical knowledge
 1. Edit: `config/respiratory_conditions.yaml`
 2. Edit: `config/red_flags.yaml`
 3. Edit: `config/comorbidity_effects.yaml`
 4. Edit: `config/symptom_causality.yaml`
+5. See: [docs/modules/DATA_MODULE.md](modules/DATA_MODULE.md) - Configuration guide
 
 #### Add new features
-1. [IMPLEMENTATION_SUMMARY.md](../IMPLEMENTATION_SUMMARY.md) - Module organization
+1. [docs/modules/IMPLEMENTATION_SUMMARY.md](modules/IMPLEMENTATION_SUMMARY.md) - Module organization
 2. [TESTING.md](TESTING.md) - Adding new tests
 3. [CHANGE_HISTORY.md](../CHANGE_HISTORY.md) - Outstanding priorities
+4. [docs/updates/UPDATE_LOG.md](updates/UPDATE_LOG.md) - Recent updates
 
 #### Troubleshoot issues
-1. [DEEP_LEARNING_GUIDE.md](../DEEP_LEARNING_GUIDE.md) - GPU and model issues
-2. [TESTING.md](TESTING.md) - Test failures and common issues
-3. [README.md](../README.md) - System requirements and setup
+1. [docs/guides/SOP.md](guides/SOP.md) - Troubleshooting section
+2. [DEEP_LEARNING_GUIDE.md](../DEEP_LEARNING_GUIDE.md) - GPU and model issues
+3. [TESTING.md](TESTING.md) - Test failures and common issues
+4. [README.md](../README.md) - System requirements and setup
 
 #### Run tests
-1. [TESTING.md](TESTING.md) - **Complete testing guide (22 test files)**
+1. [TESTING.md](TESTING.md) - **Complete testing guide (26 test files)**
 2. [TESTING_MULTI_TURN_DIALOGUES.md](TESTING_MULTI_TURN_DIALOGUES.md) - Dialogue tests
-3. Run: `python test_basic.py` - Start here
+3. Run: `python tests/test_basic.py` - Start here
 
 ## Documentation by File Location
 
 ### Root Directory
-- README.md
-- PROJECT_SUMMARY.md
-- IMPLEMENTATION_SUMMARY.md
-- IMPLEMENTATION_DETAILS.md
-- CHANGE_HISTORY.md
-- DEEP_LEARNING_GUIDE.md
+- README.md - Quick start and overview
+- PROJECT_SUMMARY.md - Problem statement and vision
+- DEEP_LEARNING_GUIDE.md - GPU setup guide
+- CHANGE_HISTORY.md - Project evolution
+- cli.py - Command-line interface
+- patient_cli.py - Web interface
 
 ### docs/ Directory
 
 #### Core Documentation
 - docs/DOCUMENTATION_INDEX.md ⭐ **NEW** - This file
-- docs/TESTING.md ⭐ **NEW** - Comprehensive testing guide
+- docs/TESTING.md ⭐ **NEW** - Comprehensive testing guide (26 tests)
 - docs/TESTING_MULTI_TURN_DIALOGUES.md - Dialogue integration tests
+
+#### Module Documentation (docs/modules/) ⭐ **NEW**
+- docs/modules/DATA_MODULE.md - Data layer documentation
+- docs/modules/MODELS_MODULE.md - Neural networks documentation
+- docs/modules/CONVERSATION_MODULE.md - Dialogue engine documentation
+- docs/modules/TRIAGE_MODULE.md - Diagnosis orchestration documentation
+- docs/modules/IMPLEMENTATION_SUMMARY.md - High-level architecture
+- docs/modules/IMPLEMENTATION_DETAILS.md - Deep-learning details
+
+#### Guides (docs/guides/) ⭐ **NEW**
+- docs/guides/SOP.md - Complete Standard Operating Procedure
+
+#### Updates (docs/updates/) ⭐ **NEW**
+- docs/updates/UPDATE_LOG.md - Consolidated update history
 
 #### Architecture Documentation (docs/architecture/)
 - docs/architecture/DIALOGUE_ENGINE.md
@@ -269,24 +296,68 @@ Complete guide to all PHAITA documentation.
 - docs/features/TEMPLATE_IMPLEMENTATION.md
 - docs/features/TEMPLATE_QUICKSTART.md
 
+### tests/ Directory ⭐ **REORGANIZED**
+All test files (26 total) now in `tests/` directory:
+- tests/test_basic.py - Core tests
+- tests/test_enhanced_bayesian.py - Bayesian features
+- tests/test_dialogue_engine.py - Dialogue tests
+- tests/test_diagnosis_orchestrator.py - Diagnosis tests
+- tests/test_conversation_flow.py - Integration tests
+- ... and 21 more (see [TESTING.md](TESTING.md))
+
+### demos/ Directory ⭐ **NEW**
+All demo files (10 total) now in `demos/` directory:
+- demos/simple_demo.py - Quick demo
+- demos/demo_dialogue_engine.py - Dialogue demo
+- demos/demo_deep_learning.py - Full system demo
+- ... and 7 more
+
+### config/ Directory
+- config/respiratory_conditions.yaml - Medical conditions
+- config/red_flags.yaml - Emergency criteria
+- config/comorbidity_effects.yaml - Comorbidity modeling
+- config/symptom_causality.yaml - Causal relationships
+
 ### .github/ Directory
 - .github/copilot-instructions.md - Instructions for GitHub Copilot
 
 ## Document Status
 
 ### Core Documentation
-- ✅ README.md - Up to date
+- ✅ README.md - **UPDATED** with new structure
 - ✅ PROJECT_SUMMARY.md - Current
-- ✅ IMPLEMENTATION_SUMMARY.md - Current
 - ✅ CHANGE_HISTORY.md - Current
+- ✅ docs/DOCUMENTATION_INDEX.md - **UPDATED** with new paths
+
+### Module Documentation ⭐ **NEW**
+- ✅ docs/modules/DATA_MODULE.md - **NEW** comprehensive data layer guide
+- ✅ docs/modules/MODELS_MODULE.md - **NEW** comprehensive models guide
+- ✅ docs/modules/CONVERSATION_MODULE.md - **NEW** comprehensive dialogue guide
+- ✅ docs/modules/TRIAGE_MODULE.md - **NEW** comprehensive triage guide
+- ✅ docs/modules/IMPLEMENTATION_SUMMARY.md - **MOVED** from root
+- ✅ docs/modules/IMPLEMENTATION_DETAILS.md - **MOVED** from root
+
+### Guides ⭐ **NEW**
+- ✅ docs/guides/SOP.md - **NEW** comprehensive Standard Operating Procedure
+
+### Updates ⭐ **NEW**
+- ✅ docs/updates/UPDATE_LOG.md - **NEW** consolidated update history
+- 🗑️ NORMALIZATION_FIX_SUMMARY.md - **REMOVED** (consolidated)
+- 🗑️ VERIFICATION_REPORT.md - **REMOVED** (consolidated)
 
 ### Testing Documentation
-- ✅ TESTING.md - **NEW** comprehensive guide
-- ✅ TESTING_MULTI_TURN_DIALOGUES.md - Current
-- ⚠️ .github/copilot-instructions.md - Needs update with full test list
+- ✅ docs/TESTING.md - **UPDATED** for 26 test files
+- ✅ docs/TESTING_MULTI_TURN_DIALOGUES.md - Current
+- ⚠️ .github/copilot-instructions.md - Needs update with new paths
 
 ### Feature Documentation
 - ✅ All feature docs current and accurate
+
+### Repository Organization ⭐ **REORGANIZED**
+- ✅ All tests moved to `tests/` directory (26 files)
+- ✅ All demos moved to `demos/` directory (10 files)
+- ✅ Test imports updated for new location
+- ✅ All tests verified working from new location
 
 ## Contributing to Documentation
 
