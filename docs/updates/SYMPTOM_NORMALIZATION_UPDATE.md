@@ -1,8 +1,17 @@
 # Symptom Normalization Centralization Update
 
 **Date:** 2025-01-04  
+**Updated:** 2025-01-XX (Removed all local normalization wrappers)  
 **Issue:** Inconsistent symptom normalization across the application  
 **Solution:** Centralized normalization functions in `phaita/utils/text.py`
+
+## Latest Update (2025-01-XX)
+
+All local `_normalize_symptom()` wrapper functions have been removed. All files now import and call the centralized functions directly:
+- `normalize_symptom()` from `phaita.utils.text` - for spaces format
+- `normalize_symptom_to_underscores()` from `phaita.utils.text` - for underscores format
+
+This eliminates 31 lines of redundant wrapper code and ensures true consolidation with no intermediate layers.
 
 ## Problem Statement
 
@@ -71,23 +80,27 @@ normalize_symptom_to_underscores('Shortness of Breath')
 
 3. **phaita/conversation/dialogue_engine.py**
    - Imports `normalize_symptom`
-   - `_normalize_symptom()` now delegates to centralized function
+   - Removed local `_normalize_symptom()` wrapper, calls centralized function directly
 
 4. **phaita/triage/diagnosis_orchestrator.py**
    - Imports `normalize_symptom`
-   - `_normalize_symptom()` now delegates to centralized function
+   - Removed local `_normalize_symptom()` wrapper, calls centralized function directly
 
 5. **phaita/triage/info_sheet.py**
    - Imports `normalize_symptom_to_underscores`
-   - `_normalize_symptom()` uses underscores format for structured output
+   - Removed local `_normalize_symptom()` wrapper, calls centralized function directly
 
-6. **phaita/conversation/engine.py**
+6. **phaita/triage/question_strategy.py**
+   - Imports `normalize_symptom`
+   - Removed local `_normalise()` function, calls centralized function directly
+
+7. **phaita/conversation/engine.py**
    - Imports `normalize_symptom_to_underscores`
    - `add_symptoms()` uses centralized function
 
-7. **cli.py**
+8. **cli.py**
    - Imports `normalize_symptom_to_underscores`
-   - `_normalize_symptom()` uses centralized function
+   - Removed local `_normalize_symptom()` wrapper, calls centralized function directly
 
 ### New Files
 1. **phaita/utils/text.py** - New utility module with normalization functions

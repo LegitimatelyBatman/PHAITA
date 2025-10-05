@@ -138,23 +138,18 @@ class DiagnosisOrchestrator:
         
         # Normalize patient symptoms for matching
         normalized_patient_symptoms = {
-            self._normalize_symptom(s) for s in patient_symptoms
+            normalize_symptom(s) for s in patient_symptoms
         }
         
         # Find matching red-flags
         detected_red_flags: List[str] = []
         for red_flag in condition_red_flags:
-            normalized_red_flag = self._normalize_symptom(red_flag)
+            normalized_red_flag = normalize_symptom(red_flag)
             if normalized_red_flag in normalized_patient_symptoms:
                 detected_red_flags.append(red_flag)
         
         return detected_red_flags
-    
-    @staticmethod
-    def _normalize_symptom(symptom: str) -> str:
-        """Normalize symptom string for comparison."""
-        # Use centralized normalization function
-        return normalize_symptom(symptom)
+
     
     def determine_escalation(
         self,

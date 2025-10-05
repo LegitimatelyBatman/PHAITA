@@ -116,20 +116,7 @@ class DialogueEngine:
             for code in self.state.differential_probabilities:
                 self.state.differential_probabilities[code] /= total
     
-    @staticmethod
-    def _normalize_symptom(symptom: str) -> str:
-        """Normalize symptom name for consistent matching.
-        
-        Converts: 'Severe_Respiratory-Distress' -> 'severe respiratory distress'
-        
-        Args:
-            symptom: Raw symptom name with any formatting
-            
-        Returns:
-            Normalized symptom name (lowercase, spaces only)
-        """
-        # Use centralized normalization function
-        return normalize_symptom(symptom)
+
     
     def _load_temporal_patterns(self) -> Dict[str, Dict]:
         """Load temporal progression patterns from YAML config.
@@ -170,7 +157,7 @@ class DialogueEngine:
             hours_since_onset: Optional hours since symptom first appeared
         """
         # Normalize symptom name for consistent matching
-        normalized_symptom = self._normalize_symptom(symptom)
+        normalized_symptom = normalize_symptom(symptom)
         
         # Track the evidence (use original symptom name for tracking)
         if present:
