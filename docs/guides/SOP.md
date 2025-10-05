@@ -414,10 +414,26 @@ if __name__ == '__main__':
 
 ### 5.3 Build CLI Application
 
+PHAITA provides both a simplified entry point (`main.py`) and advanced CLI (`cli.py`):
+
+**Simplified Entry Point (main.py):**
+```bash
+# Quick start
+python main.py demo                              # Run demo
+python main.py train --epochs 50                 # Train model
+python main.py diagnose --interactive            # Interactive diagnosis
+python main.py interactive                       # Patient simulation
+python main.py generate --count 10               # Generate data
+
+# Access full CLI
+python main.py cli --help
+```
+
+**Advanced CLI (cli.py):**
 See `cli.py` for complete implementation. Key commands:
 
 ```bash
-# Interactive demo
+# Interactive demo with options
 python cli.py demo --num-examples 5
 
 # Generate synthetic data
@@ -436,6 +452,19 @@ python cli.py train --epochs 50 --batch-size 16
 
 ### 6.1 Quick Start (Demo Mode)
 
+**Using the simplified entry point (main.py):**
+```bash
+# Run demo (easiest way to get started)
+python main.py demo
+
+# Run interactive diagnosis
+python main.py diagnose --interactive
+
+# Run patient simulation
+python main.py interactive
+```
+
+**Using demos directly:**
 ```bash
 # Run interactive demo (no dependencies)
 python demos/simple_demo.py
@@ -449,15 +478,31 @@ python demos/demo_deep_learning.py
 
 ### 6.2 CLI Usage
 
+**Simplified CLI (main.py):**
 ```bash
 # Interactive triage session
-python cli.py diagnose --interactive
+python main.py diagnose --interactive
+
+# Diagnose specific complaint
+python main.py diagnose --complaint "I can't breathe"
+
+# Generate synthetic data
+python main.py generate --count 50
+```
+
+**Advanced CLI (cli.py):**
+```bash
+# Interactive triage session with detailed output
+python cli.py diagnose --interactive --detailed
 
 # Process batch of complaints
 python cli.py batch-diagnose --input complaints.json --output diagnoses.json
 
 # Challenge mode (test medical knowledge)
 python cli.py challenge
+
+# Conversation mode
+python cli.py conversation --symptoms "cough,fever"
 ```
 
 ### 6.3 Web Interface
@@ -861,26 +906,30 @@ pip install -r requirements.txt
 # Test
 python tests/test_basic.py
 
-# Demo
-python demos/simple_demo.py
+# Demo (NEW: simplified entry point)
+python main.py demo
 
 # Train
-python cli.py train --epochs 50
+python main.py train --epochs 50
 
 # Run
-python cli.py diagnose --interactive
+python main.py diagnose --interactive
+
+# Interactive simulation
+python main.py interactive
 
 # Deploy
 python patient_cli.py --port 8080
 ```
 
 ### Key Files
+- `main.py` - **NEW: Centralized entry point for common tasks** ⭐
+- `cli.py` - Command-line interface (advanced features)
+- `patient_cli.py` - Web interface
 - `config.yaml` - Main configuration
 - `config/respiratory_conditions.yaml` - Medical knowledge
 - `config/red_flags.yaml` - Emergency criteria
 - `requirements.txt` - Dependencies
-- `cli.py` - Command-line interface
-- `patient_cli.py` - Web interface
 
 ### Support
 - **Documentation:** [docs/DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md)
@@ -901,11 +950,11 @@ pip install -r requirements.txt
 # 2. Verify installation
 python tests/test_basic.py
 
-# 3. Run demo
-python demos/simple_demo.py
+# 3. Run demo (easiest way to start)
+python main.py demo
 
 # 4. Try interactive triage
-python cli.py diagnose --interactive
+python main.py diagnose --interactive
 ```
 
 ### Workflow 2: Development
