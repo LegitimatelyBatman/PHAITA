@@ -18,10 +18,12 @@ from collections import defaultdict
 
 from ..models.generator import SymptomGenerator, ComplaintGenerator
 from ..models.discriminator import DiagnosisDiscriminator
+from ..models.bayesian_network import BayesianSymptomNetwork, LearnableBayesianSymptomNetwork, TORCH_AVAILABLE
 from ..data.icd_conditions import RespiratoryConditions
 from ..data.forum_scraper import create_data_augmentation, ForumDataAugmentation
 from ..utils.metrics import compute_diversity_metrics, compute_diagnosis_metrics
 from ..utils.realism_scorer import create_realism_scorer, RealismLoss
+from ..utils.medical_loss import MedicalAccuracyLoss
 
 
 class DiversityLoss(nn.Module):
@@ -122,19 +124,30 @@ class AdversarialTrainer:
     def __init__(self,
                  generator_lr: float = 2e-5,
                  discriminator_lr: float = 1e-4,
+                 bayesian_lr: float = 1e-3,
                  diversity_weight: float = 0.1,
                  realism_weight: float = 0.1,
+                 medical_accuracy_weight: float = 0.2,
                  use_curriculum_learning: bool = True,
                  use_forum_data: bool = True,
                  use_pretrained_generator: bool = False,
                  use_pretrained_discriminator: bool = False,
+                 use_learnable_bayesian: bool = False,
                  device: Optional[str] = None,
                  real_dataset: Optional[List[Dict[str, Any]]] = None):
         
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         
+        # Initialize Bayesian network (learnable or standard)
+        self.use_learnable_bayesian = use_learnable_bayesian and TORCH_AVAILABLE
+        if self.use_learnable_bayesian:
+            self.bayesian_network = LearnableBayesianSymptomNetwork(device=self.device)
+            self.symptom_generator = SymptomGenerator(bayesian_network=self.bayesian_network)
+        else:
+            self.bayesian_network = BayesianSymptomNetwork()
+            self.symptom_generator = SymptomGenerator(bayesian_network=self.bayesian_network)
+        
         # Initialize models
-        self.symptom_generator = SymptomGenerator()
         self.complaint_generator = ComplaintGenerator(
             use_pretrained=use_pretrained_generator
         ).to(self.device)
@@ -154,6 +167,14 @@ class AdversarialTrainer:
         self.realism_scorer = create_realism_scorer(use_medical_model=True, device=self.device)
         self.realism_loss = RealismLoss(self.realism_scorer, weight=realism_weight)
         
+        # Initialize medical accuracy loss for learnable Bayesian network
+        if self.use_learnable_bayesian:
+            self.medical_accuracy_loss = MedicalAccuracyLoss(device=self.device)
+            self.medical_accuracy_weight = medical_accuracy_weight
+        else:
+            self.medical_accuracy_loss = None
+            self.medical_accuracy_weight = 0.0
+        
         # Initialize optimizers
         self.gen_optimizer = AdamW(
             self.generator.parameters(),
@@ -167,9 +188,20 @@ class AdversarialTrainer:
             weight_decay=0.01
         )
         
+        # Initialize Bayesian network optimizer if using learnable mode
+        if self.use_learnable_bayesian:
+            self.bayesian_optimizer = AdamW(
+                self.bayesian_network.parameters(),
+                lr=bayesian_lr,
+                weight_decay=0.01
+            )
+        else:
+            self.bayesian_optimizer = None
+        
         # Learning rate schedulers (will be initialized in train())
         self.gen_scheduler = None
         self.disc_scheduler = None
+        self.bayesian_scheduler = None
         
         # Gradient clipping
         self.max_grad_norm = 1.0
@@ -611,6 +643,9 @@ class AdversarialTrainer:
         self.gen_scheduler = CosineAnnealingLR(self.gen_optimizer, T_max=num_epochs)
         self.disc_scheduler = CosineAnnealingLR(self.disc_optimizer, T_max=num_epochs)
         
+        if self.use_learnable_bayesian and self.bayesian_optimizer is not None:
+            self.bayesian_scheduler = CosineAnnealingLR(self.bayesian_optimizer, T_max=num_epochs)
+        
         for epoch in range(num_epochs):
             epoch_losses = defaultdict(float)
             
@@ -649,6 +684,12 @@ class AdversarialTrainer:
                     for key, value in gen_losses.items():
                         epoch_losses[key] += value
                 
+                # Train Bayesian network if using learnable mode
+                if self.use_learnable_bayesian and step % 3 == 0:
+                    bayesian_losses = self.train_bayesian_step(batch_size)
+                    for key, value in bayesian_losses.items():
+                        epoch_losses[key] += value
+                
                 for key, value in disc_losses.items():
                     epoch_losses[key] += value
             
@@ -660,6 +701,8 @@ class AdversarialTrainer:
             # Update learning rates
             self.gen_scheduler.step()
             self.disc_scheduler.step()
+            if self.use_learnable_bayesian and self.bayesian_scheduler is not None:
+                self.bayesian_scheduler.step()
             
             # Enhanced logging and evaluation
             if epoch % eval_interval == 0:
@@ -709,6 +752,57 @@ class AdversarialTrainer:
         
         self.logger.info("Training completed!")
         return dict(self.training_history)
+    
+    def train_bayesian_step(self, batch_size: int) -> Dict[str, float]:
+        """
+        Train learnable Bayesian network for one step using medical accuracy loss.
+        
+        Args:
+            batch_size: Number of samples to generate
+            
+        Returns:
+            Dictionary of loss values
+        """
+        if not self.use_learnable_bayesian or self.bayesian_optimizer is None:
+            return {}
+        
+        self.bayesian_network.train()
+        self.bayesian_optimizer.zero_grad()
+        
+        # Sample multiple batches to get stable gradient estimate
+        sampled_symptoms_list = []
+        condition_codes_list = []
+        
+        for _ in range(batch_size):
+            condition_code = random.choice(self.condition_codes)
+            symptoms = self.bayesian_network.sample_symptoms(condition_code)
+            sampled_symptoms_list.append(symptoms)
+            condition_codes_list.append(condition_code)
+        
+        # Compute medical accuracy loss
+        medical_loss = self.medical_accuracy_loss(
+            sampled_symptoms_list,
+            condition_codes_list,
+            self.bayesian_network
+        )
+        
+        # Backward pass
+        medical_loss.backward()
+        
+        # Gradient clipping
+        torch.nn.utils.clip_grad_norm_(self.bayesian_network.parameters(), self.max_grad_norm)
+        
+        # Update weights
+        self.bayesian_optimizer.step()
+        
+        # Get detailed loss components for logging
+        loss_components = self.medical_accuracy_loss.get_loss_components(
+            sampled_symptoms_list,
+            condition_codes_list,
+            self.bayesian_network
+        )
+        
+        return loss_components
     
     def _compute_epoch_diversity_metrics(self, complaints: List[str]) -> Dict[str, float]:
         """Compute diversity metrics for current epoch."""
@@ -871,12 +965,20 @@ class AdversarialTrainer:
         import os
         os.makedirs("checkpoints", exist_ok=True)
         
-        torch.save({
+        checkpoint = {
             'discriminator_state_dict': self.discriminator.state_dict(),
             'gen_optimizer_state_dict': self.gen_optimizer.state_dict(),
             'disc_optimizer_state_dict': self.disc_optimizer.state_dict(),
             'training_history': dict(self.training_history),
-        }, f"checkpoints/{checkpoint_name}.pth")
+        }
+        
+        # Save Bayesian network if learnable
+        if self.use_learnable_bayesian:
+            checkpoint['bayesian_state_dict'] = self.bayesian_network.state_dict()
+            if self.bayesian_optimizer is not None:
+                checkpoint['bayesian_optimizer_state_dict'] = self.bayesian_optimizer.state_dict()
+        
+        torch.save(checkpoint, f"checkpoints/{checkpoint_name}.pth")
         
         self.logger.info(f"Models saved as {checkpoint_name}.pth")
     
@@ -887,5 +989,11 @@ class AdversarialTrainer:
         self.gen_optimizer.load_state_dict(checkpoint['gen_optimizer_state_dict'])
         self.disc_optimizer.load_state_dict(checkpoint['disc_optimizer_state_dict'])
         self.training_history = defaultdict(list, checkpoint['training_history'])
+        
+        # Load Bayesian network if present and using learnable mode
+        if self.use_learnable_bayesian and 'bayesian_state_dict' in checkpoint:
+            self.bayesian_network.load_state_dict(checkpoint['bayesian_state_dict'])
+            if self.bayesian_optimizer is not None and 'bayesian_optimizer_state_dict' in checkpoint:
+                self.bayesian_optimizer.load_state_dict(checkpoint['bayesian_optimizer_state_dict'])
         
         self.logger.info(f"Models loaded from {checkpoint_path}")

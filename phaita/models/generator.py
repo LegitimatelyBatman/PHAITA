@@ -55,8 +55,11 @@ DEFAULT_COMPLAINT_MODEL = ModelConfig().mistral_model
 class SymptomGenerator:
     """Generates structured patient presentations for medical conditions."""
 
-    def __init__(self, conditions: Optional[Dict[str, Dict]] = None):
-        network = BayesianSymptomNetwork(conditions=conditions)
+    def __init__(self, conditions: Optional[Dict[str, Dict]] = None, bayesian_network=None):
+        if bayesian_network is None:
+            network = BayesianSymptomNetwork(conditions=conditions)
+        else:
+            network = bayesian_network
         self.simulator = PatientSimulator(network)
         self.bayesian_network = network
         RespiratoryConditions.register_reload_hook(self.reload_conditions)
