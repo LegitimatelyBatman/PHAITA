@@ -143,19 +143,52 @@ pip install -e .[scraping]
 pip install -e .[gpu,dev]
 ```
 
-### CLI Recipes
+### Quick Start with main.py
+
+PHAITA now includes a simplified `main.py` entry point for common tasks:
+
 ```bash
-# Run an interactive demo
+# Run a quick demo (easiest way to get started)
+python main.py demo
+
+# Train the model
+python main.py train --epochs 50
+
+# Diagnose a patient complaint
+python main.py diagnose --complaint "I can't breathe"
+
+# Interactive diagnosis session
+python main.py diagnose --interactive
+
+# Interactive patient simulation
+python main.py interactive
+
+# Generate synthetic data
+python main.py generate --count 10
+
+# Access full CLI features
+python main.py cli --help
+```
+
+### Advanced CLI Usage
+
+For advanced features, use `cli.py` or `patient_cli.py` directly:
+
+```bash
+# Run an interactive demo with specific options
 python demos/simple_demo.py
 
-# Generate synthetic complaints
+# Generate synthetic complaints with custom output
 python cli.py generate --count 10 --output complaints.json
 
-# Train the adversarial loop
-python cli.py train --epochs 50 --batch-size 16
+# Train with specific hyperparameters
+python cli.py train --epochs 50 --batch-size 16 --lr 0.001
 
-# Diagnose a custom complaint
-python cli.py diagnose --complaint "I can't catch my breath"
+# Diagnose with detailed analysis
+python cli.py diagnose --complaint "I can't catch my breath" --detailed
+
+# Run challenge mode
+python cli.py challenge --rare-cases 5 --show-failures
 ```
 
 ### Editing respiratory condition definitions
@@ -260,10 +293,16 @@ docs/                  # Documentation
 ├── architecture/      # Architecture documentation
 └── features/          # Feature-specific guides
 
-tests/                 # All test files (26 test scripts)
+tests/                 # All test files (27 test scripts)
 demos/                 # Demo scripts (10 demos)
 config/                # YAML configuration files
 scripts/               # Utility scripts (forum scraping, profiling)
+
+main.py                # Centralized entry point for common tasks ⭐ NEW
+cli.py                 # Command-line interface (advanced features)
+patient_cli.py         # Web interface
+config.yaml            # Main configuration file
+```
 
 cli.py                 # Command-line interface
 patient_cli.py         # Web interface
