@@ -10,16 +10,17 @@ PHAITA explores adversarial training for triage. A complaint generator creates h
 The end-user experience is an Akinator-style triage conversation. Patients describe their concerns, the system probes with clarifying questions, and once enough evidence is gathered it presents ten differential diagnoses with probability estimates, highlights red-flag symptoms, and advises whether to escalate to emergency services or follow up with a family physician.
 
 ## System Overview
-- **Generator stack**: Bayesian symptom sampler, optional Mistral 7B complaint generation, template fallback for offline use.
+- **Generator stack**: Learnable or standard Bayesian symptom sampler with gradient-optimizable probabilities, optional Mistral 7B complaint generation, template fallback for offline use.
 - **Discriminator stack**: DeBERTa encoder fused with a symptom knowledge graph via Graph Neural Network layers.
-- **Curriculum training**: Progresses from purely synthetic complaints to forum-style phrasing and includes lexical/semantic diversity objectives.
+- **Curriculum training**: Progresses from purely synthetic complaints to forum-style phrasing and includes lexical/semantic diversity objectives plus medical accuracy constraints.
 - **Questioning tools**: Template/LLM prompts that gather clarifying information during demos.
+- **Medical accuracy loss**: Guides learnable symptom networks to maintain medically plausible distributions via alignment, constraint, and diversity terms.
 
 ## Workflow
-1. Sample a target condition and symptoms from ICD-10 priors.
+1. Sample a target condition and symptoms from ICD-10 priors using learnable or fixed probabilities.
 2. Produce a complaint and optional follow-up questions.
 3. Diagnose via the discriminator while logging realism, diversity, and failure cases.
-4. Update generator and discriminator alternately using adversarial loss terms.
+4. Update generator, discriminator, and optionally Bayesian network alternately using adversarial loss terms plus medical accuracy constraints.
 
 ## Metrics & Evaluation
 - Diagnosis accuracy across standard, rare, and forum-style cases.

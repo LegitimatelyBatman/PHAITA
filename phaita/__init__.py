@@ -15,6 +15,11 @@ from .models.generator import SymptomGenerator, ComplaintGenerator
 from .models.discriminator import DiagnosisDiscriminator
 from .models.discriminator_lite import LightweightDiscriminator
 from .models.bayesian_network import BayesianSymptomNetwork
+try:
+    from .models.bayesian_network import LearnableBayesianSymptomNetwork, TORCH_AVAILABLE
+except ImportError:
+    TORCH_AVAILABLE = False
+    LearnableBayesianSymptomNetwork = None
 from .generation.patient_agent import (
     PatientDemographics,
     PatientHistory,
@@ -55,6 +60,7 @@ __all__ = [
     "DiagnosisDiscriminator",
     "LightweightDiscriminator",
     "BayesianSymptomNetwork",
+    "LearnableBayesianSymptomNetwork",
     "PatientDemographics",
     "PatientHistory",
     "PatientPresentation",

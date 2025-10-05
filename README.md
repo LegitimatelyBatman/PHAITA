@@ -89,14 +89,16 @@ The following models are automatically downloaded from HuggingFace Hub:
 ## Architecture Snapshot
 | Stage | Components | Purpose |
 |-------|------------|---------|
-| Complaint generation | Bayesian symptom sampler → Mistral-7B-Instruct (4-bit quantized) | Produce varied patient narratives for a target condition. |
+| Complaint generation | Learnable/Standard Bayesian symptom sampler → Mistral-7B-Instruct (4-bit quantized) | Produce varied patient narratives for a target condition with optional learned symptom probabilities. |
 | Diagnosis | DeBERTa-v3-base encoder + Graph Attention Network (torch-geometric) | Predict condition and assess complaint realism. |
-| Training loop | AdversarialTrainer with curriculum, diversity, and unsupervised forum regularisation | Alternate generator/discriminator optimization on synthetic + forum-style text with masked unlabeled samples. |
+| Training loop | AdversarialTrainer with curriculum, diversity, medical accuracy, and unsupervised forum regularisation | Alternate generator/discriminator/Bayesian network optimization on synthetic + forum-style text with masked unlabeled samples. |
 
 Curriculum batches now expose a boolean mask so unlabeled forum complaints skip
 cross-entropy updates. Instead, the discriminator minimises the entropy of its
 predictions on those samples, encouraging confident assignments without
 hallucinating random labels.
+
+**New:** The Bayesian symptom network can now be trained end-to-end with gradient descent using `LearnableBayesianSymptomNetwork` and `MedicalAccuracyLoss`, allowing symptom probabilities to adapt to improve medical consistency while maintaining plausibility constraints.
 
 ## Key Capabilities
 - **Synthetic-first pipeline**: Generates complaints, question prompts, and labeled datasets without patient data.
@@ -257,8 +259,9 @@ requests and respects a modest rate-limit by default.
 ```python
 from phaita import AdversarialTrainer
 from phaita.models import ComplaintGenerator, DiagnosisDiscriminator, SymptomGenerator
+from phaita.models.bayesian_network import LearnableBayesianSymptomNetwork
 
-# Initialize models (requires GPU with 4GB+ VRAM or CPU with use_4bit=False)
+# Standard mode (fixed probabilities)
 symptom_gen = SymptomGenerator()
 generator = ComplaintGenerator(use_pretrained=True, use_4bit=True)  # Required: use_pretrained=True
 discriminator = DiagnosisDiscriminator(use_pretrained=True)  # Required: use_pretrained=True
@@ -272,6 +275,19 @@ print(presentation.complaint_text)
 predictions = discriminator.predict_diagnosis([presentation.complaint_text], top_k=3)
 for candidate in predictions[0]:
     print(candidate["condition_code"], candidate["probability"])
+
+# Learnable Bayesian network mode (recommended for training)
+learnable_network = LearnableBayesianSymptomNetwork(device="cuda")
+symptom_gen_learnable = SymptomGenerator(bayesian_network=learnable_network)
+trainer_learnable = AdversarialTrainer(
+    use_learnable_bayesian=True,
+    use_pretrained_generator=True,
+    use_pretrained_discriminator=True,
+    medical_accuracy_weight=0.2  # Weight for medical accuracy loss
+)
+
+# Train with learnable symptom probabilities
+history = trainer_learnable.train(num_epochs=100, batch_size=16)
 ```
 
 **Note**: All models now require `use_pretrained=True` (the default). Attempting to use `use_pretrained=False` will raise a `ValueError`.
