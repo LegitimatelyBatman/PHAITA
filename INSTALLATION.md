@@ -62,6 +62,48 @@ pip install -e .[all]
 pip install -e .[gpu,dev]
 ```
 
+## How These Two Methods Relate
+
+Both installation methods achieve the same result but through different mechanisms:
+
+### The Connection
+**`setup.py` reads from the requirements files programmatically.** When you use `pip install -e .[gpu]`, setup.py:
+1. Reads `requirements-base.txt` for core dependencies (installed as `install_requires`)
+2. Reads `requirements-gpu.txt` for the `[gpu]` extra
+3. Installs both sets of packages
+
+This means:
+- ✅ **Method 1** (`pip install -r requirements-base.txt && pip install -r requirements-gpu.txt`) and **Method 2** (`pip install -e .[gpu]`) install **exactly the same packages**
+- ✅ The requirements files are the **single source of truth** for dependencies
+- ✅ `setup.py` is just a convenient wrapper that reads those files
+
+### When to Use Each Method
+
+**Use requirements files (Method 1)** when:
+- You want explicit control over what gets installed
+- You're setting up CI/CD pipelines or Docker containers
+- You need to install packages without installing PHAITA itself
+
+**Use setup.py extras (Method 2)** when:
+- You want to install PHAITA as a package (editable or not)
+- You prefer the convenience of `pip install -e .[extras]` syntax
+- You're developing and want the package available system-wide
+
+### The "all" Extra
+The `[all]` extra is a convenience that combines all optional extras:
+```python
+# In setup.py:
+extras_require["all"] = extras_require["gpu"] + extras_require["dev"] + extras_require["scraping"]
+```
+
+So `pip install -e .[all]` is equivalent to:
+```bash
+pip install -r requirements-base.txt
+pip install -r requirements-gpu.txt
+pip install -r requirements-dev.txt
+pip install -r requirements-scraping.txt
+```
+
 ## What's Included in Each Option
 
 ### Base Installation (requirements-base.txt)
