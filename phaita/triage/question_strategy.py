@@ -6,10 +6,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple
 
 from ..data.red_flags import RESPIRATORY_RED_FLAGS
-
-
-def _normalise(text: str) -> str:
-    return " ".join(text.lower().strip().split())
+from ..utils.text import normalize_symptom
 
 
 @dataclass
@@ -32,8 +29,8 @@ class ExpectedInformationGainStrategy:
         if not question:
             return 0.0
 
-        question_norm = _normalise(question)
-        asked = {_normalise(turn.get("question", "")) for turn in conversation_history}
+        question_norm = normalize_symptom(question)
+        asked = {normalize_symptom(turn.get("question", "")) for turn in conversation_history}
 
         if question_norm in asked:
             return 0.0
@@ -64,7 +61,7 @@ class ExpectedInformationGainStrategy:
                 keywords.append(flag)
 
             for keyword in keywords:
-                keyword_norm = _normalise(keyword)
+                keyword_norm = normalize_symptom(keyword)
                 if keyword_norm and keyword_norm in question_norm:
                     weight = (
                         self.red_flag_weight
@@ -80,7 +77,7 @@ class ExpectedInformationGainStrategy:
 
         info_gain = base_uncertainty * novelty_scale + bonus
 
-        if question_norm in {_normalise(turn.get("question", "")) for turn in conversation_history[-2:]}:
+        if question_norm in {normalize_symptom(turn.get("question", "")) for turn in conversation_history[-2:]}:
             info_gain *= self.repeat_penalty
 
         return info_gain

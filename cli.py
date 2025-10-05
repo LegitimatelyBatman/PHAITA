@@ -122,14 +122,9 @@ def _get_diagnosis_discriminator() -> DiagnosisDiscriminator:
     return model
 
 
-def _normalize_symptom(symptom: str) -> str:
-    # Use centralized normalization function for underscores format
-    return normalize_symptom_to_underscores(symptom)
-
-
 def _extract_symptoms_from_text(text: str) -> list:
     candidates = [segment for segment in text.split(",") if segment.strip()]
-    normalized = [_normalize_symptom(candidate) for candidate in candidates if candidate.strip()]
+    normalized = [normalize_symptom_to_underscores(candidate) for candidate in candidates if candidate.strip()]
     return [symptom for symptom in normalized if symptom]
 
 
@@ -605,7 +600,7 @@ def challenge_command(args):
             )
 
             comorbidity_hints = [
-                f"history_of_{_normalize_symptom(comorbidity)}"
+                f"history_of_{normalize_symptom_to_underscores(comorbidity)}"
                 for comorbidity in comorbidities
             ]
             augmented_symptoms = list(dict.fromkeys(list(symptoms) + comorbidity_hints))

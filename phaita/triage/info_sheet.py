@@ -8,17 +8,12 @@ from ..data.icd_conditions import RespiratoryConditions
 from ..utils.text import normalize_symptom_to_underscores
 
 
-def _normalize_symptom(symptom: str) -> str:
-    # Use centralized normalization function for underscores format
-    return normalize_symptom_to_underscores(symptom)
-
-
 def _extract_from_text(text: str) -> list[str]:
     segments = [segment for segment in text.split(",") if segment.strip()]
     return [
         symptom
         for segment in segments
-        if (symptom := _normalize_symptom(segment))
+        if (symptom := normalize_symptom_to_underscores(segment))
     ]
 
 
@@ -63,7 +58,7 @@ def format_info_sheet(
         observed_symptoms.update(_extract_from_text(chief_complaint))
     for turn in conversation_turns:
         for symptom in turn.get("extracted_symptoms", []) or []:
-            normalized = _normalize_symptom(str(symptom))
+            normalized = normalize_symptom_to_underscores(str(symptom))
             if normalized:
                 observed_symptoms.add(normalized)
 
@@ -81,7 +76,7 @@ def format_info_sheet(
 
         name = condition.get("name", code)
         condition_symptoms = [
-            _normalize_symptom(symptom) for symptom in condition.get("symptoms", [])
+            normalize_symptom_to_underscores(symptom) for symptom in condition.get("symptoms", [])
         ]
 
         supporting = sorted(symptom for symptom in condition_symptoms if symptom in observed_symptoms)
