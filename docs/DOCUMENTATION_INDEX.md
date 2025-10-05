@@ -8,9 +8,18 @@ Complete guide to all PHAITA documentation.
 **Quick start guide** - Overview, installation, CLI recipes, and basic usage.
 - System requirements (GPU, dependencies, models)
 - Architecture snapshot
-- Getting started commands
+- Getting started commands (including new main.py)
 - Python API examples
 - **Start here for new users**
+
+### [MAIN_PY_GUIDE.md](MAIN_PY_GUIDE.md) ⭐ NEW
+**Centralized entry point guide** - Complete guide to the simplified main.py interface.
+- Overview of main.py commands (demo, train, diagnose, interactive, generate)
+- Quick start examples
+- When to use main.py vs cli.py vs patient_cli.py
+- Architecture and delegation model
+- Testing information
+- **Best for new users and common workflows**
 
 ### [INSTALLATION.md](../INSTALLATION.md)
 **Detailed installation guide** - Complete instructions for all installation methods.
