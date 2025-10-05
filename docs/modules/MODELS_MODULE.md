@@ -139,15 +139,18 @@ diagnosis = discriminator.diagnose("I have chest pain")
 
 **Purpose:** Probabilistic symptom modeling using Bayesian networks.
 
-**Key Class:** `BayesianSymptomNetwork`
+**Key Classes:** 
+- `BayesianSymptomNetwork` - Standard network with fixed probabilities
+- `LearnableBayesianSymptomNetwork` - Neural network with learnable weights
 
 **Features:**
 - Conditional probability tables (CPTs)
 - Prior and posterior probabilities
 - Symptom independence assumptions
 - Evidence propagation
+- Learnable weights via gradient descent (learnable variant)
 
-**Usage:**
+**Standard Usage:**
 ```python
 from phaita.models.bayesian_network import BayesianSymptomNetwork
 
@@ -160,18 +163,69 @@ prob = network.get_symptom_probability(
 )
 print(f"P(shortness_of_breath | asthma) = {prob:.2f}")
 
-# Update beliefs with evidence
-evidence = {"shortness_of_breath": True, "fever": False}
-posteriors = network.compute_posteriors(evidence)
-print(f"P(asthma | evidence) = {posteriors['J45.9']:.2f}")
+# Sample symptoms for a condition
+symptoms = network.sample_symptoms(
+    condition_code="J45.9",
+    num_symptoms=5
+)
+print(f"Sampled symptoms: {symptoms}")
 ```
+
+**Learnable Network Usage:**
+```python
+from phaita.models.bayesian_network import LearnableBayesianSymptomNetwork
+import torch
+
+# Initialize learnable network
+network = LearnableBayesianSymptomNetwork(device="cuda")
+
+# Network is a PyTorch nn.Module with learnable parameters
+optimizer = torch.optim.Adam(network.parameters(), lr=1e-3)
+
+# Get probabilities (these are learnable)
+primary_prob, severity_prob = network.get_probabilities("J45.9")
+print(f"Primary: {primary_prob:.3f}, Severity: {severity_prob:.3f}")
+
+# Sample symptoms (using learned probabilities)
+symptoms = network.sample_symptoms("J45.9", num_symptoms=4)
+
+# Train with medical accuracy loss
+from phaita.utils.medical_loss import MedicalAccuracyLoss
+loss_fn = MedicalAccuracyLoss()
+
+sampled_symptoms = [symptoms]
+condition_codes = ["J45.9"]
+loss = loss_fn(sampled_symptoms, condition_codes, network)
+
+optimizer.zero_grad()
+loss.backward()
+optimizer.step()
+```
+
+**Learnable Architecture:**
+- **Primary symptom logit:** nn.Parameter initialized to logit(0.8)
+- **Severity symptom logit:** nn.Parameter initialized to logit(0.4)
+- **Per-condition weights:** nn.Parameter of shape [num_conditions, 2]
+- **Total parameters:** ~20 for 10 conditions
+- **Memory:** <1KB
+- **Training:** Integrated with AdversarialTrainer
 
 **Mathematical Foundation:**
 ```
-P(condition | symptoms) ∝ P(symptoms | condition) × P(condition)
+Standard: P(symptom | condition) = fixed_probability
 
-P(symptoms | condition) = ∏ P(symptom_i | condition)
+Learnable: P(symptom | condition) = σ(logit + condition_adjustment)
+where σ is the sigmoid function and adjustments are learned
 ```
+
+**Key Differences:**
+| Feature | BayesianSymptomNetwork | LearnableBayesianSymptomNetwork |
+|---------|------------------------|--------------------------------|
+| Probabilities | Fixed (0.8, 0.4) | Learned via gradient descent |
+| PyTorch Integration | No | Yes (nn.Module) |
+| Training | N/A | MedicalAccuracyLoss |
+| Memory | <100KB | <1KB parameters |
+| GPU Support | N/A | Yes (optional) |
 
 ---
 
