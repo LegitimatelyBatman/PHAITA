@@ -21,6 +21,18 @@ except ImportError:
     TemporalSymptomEncoder = None
     TemporalPatternMatcher = None
 
+# Import learnable modules (optional - requires torch)
+try:
+    from .learnable_comorbidity import LearnableComorbidityEffects, create_learnable_comorbidity_effects
+    from .learnable_causality import LearnableSymptomCausality, create_learnable_causality
+    _LEARNABLE_AVAILABLE = True
+except ImportError:
+    _LEARNABLE_AVAILABLE = False
+    LearnableComorbidityEffects = None
+    LearnableSymptomCausality = None
+    create_learnable_comorbidity_effects = None
+    create_learnable_causality = None
+
 __all__ = [
     "BayesianSymptomNetwork",
     "SymptomGenerator",
@@ -30,4 +42,8 @@ __all__ = [
     "SymptomTimeline",
     "TemporalSymptomEncoder",
     "TemporalPatternMatcher",
+    "LearnableComorbidityEffects",
+    "LearnableSymptomCausality",
+    "create_learnable_comorbidity_effects",
+    "create_learnable_causality",
 ]

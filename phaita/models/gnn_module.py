@@ -29,6 +29,14 @@ except ImportError as e:
         "Note: torch-geometric requires torch==2.5.1"
     ) from e
 
+# Try to import learnable causality module (optional)
+try:
+    from .learnable_causality import LearnableSymptomCausality
+    LEARNABLE_CAUSALITY_AVAILABLE = True
+except ImportError:
+    LEARNABLE_CAUSALITY_AVAILABLE = False
+    LearnableSymptomCausality = None
+
 
 class SymptomGraphBuilder:
     """
@@ -36,22 +44,29 @@ class SymptomGraphBuilder:
     Supports causal and temporal edges in addition to co-occurrence.
     """
     
-    def __init__(self, conditions: Dict, causality_config_path: Optional[str] = None):
+    def __init__(self, conditions: Dict, causality_config_path: Optional[str] = None, 
+                 learnable_causality: Optional['LearnableSymptomCausality'] = None):
         """
         Initialize graph builder.
         
         Args:
             conditions: Dictionary of ICD-10 conditions with symptoms
             causality_config_path: Optional path to causality config YAML
+            learnable_causality: Optional learnable causality module (overrides config_path)
         """
         self.conditions = conditions
         self.symptom_to_idx = {}
         self.idx_to_symptom = {}
         self._build_symptom_vocabulary()
         
-        # Load causality config if provided
+        # Setup causality (learnable or fixed)
+        self.learnable_causality = learnable_causality
         self.causality_config = None
-        if causality_config_path:
+        
+        if learnable_causality is not None:
+            # Use learnable causality - get config from module
+            self.causality_config = learnable_causality.get_config_for_gnn()
+        elif causality_config_path:
             self._load_causality_config(causality_config_path)
         else:
             # Try to load from default location
@@ -403,7 +418,8 @@ class SymptomGraphModule(nn.Module):
         dropout: float = 0.1,
         use_compile: bool = True,
         use_causal_edges: bool = True,
-        causality_config_path: Optional[str] = None
+        causality_config_path: Optional[str] = None,
+        learnable_causality: Optional['LearnableSymptomCausality'] = None
     ):
         """
         Initialize symptom graph module.
@@ -419,11 +435,16 @@ class SymptomGraphModule(nn.Module):
             use_compile: Whether to use torch.compile for optimization (PyTorch 2.0+)
             use_causal_edges: Whether to use causal edges (default True)
             causality_config_path: Optional path to causality config YAML
+            learnable_causality: Optional learnable causality module (overrides config_path)
         """
         super().__init__()
         
         # Build graph structure
-        self.graph_builder = SymptomGraphBuilder(conditions, causality_config_path)
+        self.graph_builder = SymptomGraphBuilder(
+            conditions, 
+            causality_config_path,
+            learnable_causality=learnable_causality
+        )
         self.use_causal_edges = use_causal_edges
         
         # Build graph with or without causal edges
