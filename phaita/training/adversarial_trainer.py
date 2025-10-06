@@ -133,10 +133,42 @@ class AdversarialTrainer:
                  use_pretrained_generator: bool = False,
                  use_pretrained_discriminator: bool = False,
                  use_learnable_bayesian: bool = False,
+                 use_learnable_comorbidity: bool = False,
+                 use_learnable_causality: bool = False,
+                 comorbidity_lr: float = 1e-3,
+                 causality_lr: float = 1e-3,
                  device: Optional[str] = None,
                  real_dataset: Optional[List[Dict[str, Any]]] = None):
         
+        # Setup logging first
+        logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger(__name__)
+        
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Initialize learnable modules (comorbidity and causality)
+        self.use_learnable_comorbidity = use_learnable_comorbidity
+        self.use_learnable_causality = use_learnable_causality
+        self.learnable_comorbidity = None
+        self.learnable_causality = None
+        
+        if self.use_learnable_comorbidity:
+            try:
+                from ..models.learnable_comorbidity import LearnableComorbidityEffects
+                self.learnable_comorbidity = LearnableComorbidityEffects(device=self.device)
+                self.logger.info("Initialized learnable comorbidity effects")
+            except ImportError:
+                self.logger.warning("Learnable comorbidity requested but module not available")
+                self.use_learnable_comorbidity = False
+        
+        if self.use_learnable_causality:
+            try:
+                from ..models.learnable_causality import LearnableSymptomCausality
+                self.learnable_causality = LearnableSymptomCausality(device=self.device)
+                self.logger.info("Initialized learnable symptom causality")
+            except ImportError:
+                self.logger.warning("Learnable causality requested but module not available")
+                self.use_learnable_causality = False
         
         # Initialize Bayesian network (learnable or standard)
         self.use_learnable_bayesian = use_learnable_bayesian and TORCH_AVAILABLE
@@ -152,7 +184,8 @@ class AdversarialTrainer:
             use_pretrained=use_pretrained_generator
         ).to(self.device)
         self.discriminator = DiagnosisDiscriminator(
-            use_pretrained=use_pretrained_discriminator
+            use_pretrained=use_pretrained_discriminator,
+            learnable_causality=self.learnable_causality
         ).to(self.device)
         
         # Use complaint_generator directly (it's now an nn.Module)
@@ -198,10 +231,32 @@ class AdversarialTrainer:
         else:
             self.bayesian_optimizer = None
         
+        # Initialize comorbidity optimizer if using learnable mode
+        if self.use_learnable_comorbidity:
+            self.comorbidity_optimizer = AdamW(
+                self.learnable_comorbidity.parameters(),
+                lr=comorbidity_lr,
+                weight_decay=0.01
+            )
+        else:
+            self.comorbidity_optimizer = None
+        
+        # Initialize causality optimizer if using learnable mode
+        if self.use_learnable_causality:
+            self.causality_optimizer = AdamW(
+                self.learnable_causality.parameters(),
+                lr=causality_lr,
+                weight_decay=0.01
+            )
+        else:
+            self.causality_optimizer = None
+        
         # Learning rate schedulers (will be initialized in train())
         self.gen_scheduler = None
         self.disc_scheduler = None
         self.bayesian_scheduler = None
+        self.comorbidity_scheduler = None
+        self.causality_scheduler = None
         
         # Gradient clipping
         self.max_grad_norm = 1.0
@@ -222,10 +277,6 @@ class AdversarialTrainer:
         self.use_forum_data = use_forum_data
         self.forum_augmenter = create_data_augmentation() if use_forum_data else None
         self.forum_complaints = []
-        
-        # Setup logging
-        logging.basicConfig(level=logging.INFO)
-        self.logger = logging.getLogger(__name__)
 
         # Load forum data if enabled
         if self.use_forum_data:

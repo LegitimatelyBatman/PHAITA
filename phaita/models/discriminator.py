@@ -8,7 +8,7 @@ keyword-based encoder that does not require transformers or torch-geometric.
 
 import math
 import random
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 import torch
 import torch.nn as nn
@@ -22,6 +22,9 @@ from ..utils.dependency_versions import (
     format_transformer_requirements,
 )
 from .discriminator_lite import VocabularyFeatureExtractor
+
+if TYPE_CHECKING:
+    from .learnable_causality import LearnableSymptomCausality
 
 # Optional dependencies are imported lazily to avoid heavy requirements when
 # using the lightweight fallback path. SymptomGraphModule will be loaded inside
@@ -45,7 +48,8 @@ class DiagnosisDiscriminator(nn.Module):
         gnn_output_dim: int = 256,
         fusion_hidden_dim: int = 512,
         dropout: float = 0.1,
-        use_causal_edges: bool = True
+        use_causal_edges: bool = True,
+        learnable_causality: Optional['LearnableSymptomCausality'] = None
     ):
         """
         Initialize the discriminator.
@@ -59,6 +63,7 @@ class DiagnosisDiscriminator(nn.Module):
             fusion_hidden_dim: Hidden dimension for fusion layer
             dropout: Dropout rate
             use_causal_edges: Whether to use causal edges in GNN (default True)
+            learnable_causality: Optional learnable causality module for GNN
         
         Raises:
             ValueError: If use_pretrained is False
@@ -72,6 +77,7 @@ class DiagnosisDiscriminator(nn.Module):
         self.text_encoder = None
         self.gnn = None
         self.graph_feature_dim = 0
+        self.learnable_causality = learnable_causality
 
         self.conditions = RespiratoryConditions.get_all_conditions()
         self.num_conditions = len(self.conditions)
@@ -142,7 +148,8 @@ class DiagnosisDiscriminator(nn.Module):
                     hidden_dim=gnn_hidden_dim,
                     output_dim=gnn_output_dim,
                     dropout=dropout,
-                    use_causal_edges=use_causal_edges
+                    use_causal_edges=use_causal_edges,
+                    learnable_causality=learnable_causality
                 )
                 self.graph_feature_dim = gnn_output_dim
             except Exception as e:

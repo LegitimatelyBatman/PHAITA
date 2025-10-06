@@ -9,6 +9,14 @@ from typing import List, Tuple, Dict, Optional
 from .bayesian_network import BayesianSymptomNetwork
 from ..data.icd_conditions import RespiratoryConditions
 
+# Try to import learnable comorbidity module (optional)
+try:
+    from .learnable_comorbidity import LearnableComorbidityEffects
+    LEARNABLE_AVAILABLE = True
+except ImportError:
+    LEARNABLE_AVAILABLE = False
+    LearnableComorbidityEffects = None
+
 
 class EnhancedBayesianNetwork:
     """
@@ -22,13 +30,28 @@ class EnhancedBayesianNetwork:
     - Cross-condition interactions (e.g., asthma + COPD)
     """
     
-    def __init__(self):
-        """Initialize enhanced Bayesian network."""
+    def __init__(self, use_learnable_comorbidity: bool = False, device: Optional[str] = None):
+        """
+        Initialize enhanced Bayesian network.
+        
+        Args:
+            use_learnable_comorbidity: If True, use learnable comorbidity effects (requires torch)
+            device: Device for learnable parameters ('cpu' or 'cuda')
+        """
         self.base_network = BayesianSymptomNetwork()
         self.conditions = RespiratoryConditions.get_all_conditions()
         
-        # Load comorbidity effects from config file
-        self._load_comorbidity_effects()
+        # Setup comorbidity effects (learnable or fixed)
+        self.use_learnable_comorbidity = use_learnable_comorbidity and LEARNABLE_AVAILABLE
+        if self.use_learnable_comorbidity:
+            self.learnable_comorbidity = LearnableComorbidityEffects(device=device)
+            # Extract fixed config from learnable module
+            self.interaction_effects = self.learnable_comorbidity.interaction_effects
+            self.max_symptom_probability = self.learnable_comorbidity.max_symptom_probability
+        else:
+            self.learnable_comorbidity = None
+            # Load comorbidity effects from config file
+            self._load_comorbidity_effects()
         
         # Age group modifiers
         self.age_modifiers = {
@@ -247,30 +270,36 @@ class EnhancedBayesianNetwork:
         comorbidity_specific_symptoms = []
         if comorbidities:
             for comorbidity in comorbidities:
-                if comorbidity in self.comorbidity_modifiers:
+                # Get comorbidity data from learnable or fixed source
+                if self.use_learnable_comorbidity:
+                    comorbidity_data = self.learnable_comorbidity.get_comorbidity_data(comorbidity)
+                elif comorbidity in self.comorbidity_modifiers:
                     comorbidity_data = self.comorbidity_modifiers[comorbidity]
-                    modifiers = comorbidity_data['symptom_modifiers']
+                else:
+                    continue
                     
-                    # Apply modifiers to existing symptoms
-                    for symptom, multiplier in modifiers.items():
-                        # Normalize symptom name (replace _ with space and vice versa for matching)
-                        symptom_normalized = symptom.replace('_', ' ')
-                        
-                        # Check if this symptom exists in our symptom list
-                        for existing_symptom in list(symptom_probs.keys()):
-                            existing_normalized = existing_symptom.replace('_', ' ')
-                            if symptom_normalized == existing_normalized or symptom == existing_symptom:
-                                # Apply multiplier and cap at max probability
-                                symptom_probs[existing_symptom] = min(
-                                    symptom_probs[existing_symptom] * multiplier,
-                                    self.max_symptom_probability
-                                )
+                modifiers = comorbidity_data.get('symptom_modifiers', {})
+                
+                # Apply modifiers to existing symptoms
+                for symptom, multiplier in modifiers.items():
+                    # Normalize symptom name (replace _ with space and vice versa for matching)
+                    symptom_normalized = symptom.replace('_', ' ')
                     
-                    # Add comorbidity-specific symptoms
-                    if comorbidity_data['specific_symptoms'] and random.random() < comorbidity_data['probability']:
-                        specific = random.choice(comorbidity_data['specific_symptoms'])
-                        if specific not in comorbidity_specific_symptoms:
-                            comorbidity_specific_symptoms.append(specific)
+                    # Check if this symptom exists in our symptom list
+                    for existing_symptom in list(symptom_probs.keys()):
+                        existing_normalized = existing_symptom.replace('_', ' ')
+                        if symptom_normalized == existing_normalized or symptom == existing_symptom:
+                            # Apply multiplier and cap at max probability
+                            symptom_probs[existing_symptom] = min(
+                                symptom_probs[existing_symptom] * multiplier,
+                                self.max_symptom_probability
+                            )
+                
+                # Add comorbidity-specific symptoms
+                if comorbidity_data.get('specific_symptoms') and random.random() < comorbidity_data.get('probability', 0.3):
+                    specific = random.choice(comorbidity_data['specific_symptoms'])
+                    if specific not in comorbidity_specific_symptoms:
+                        comorbidity_specific_symptoms.append(specific)
         
         # Check for cross-condition interactions
         if comorbidities:
@@ -397,6 +426,15 @@ class EnhancedBayesianNetwork:
         return self.rare_presentations.get(condition_code, [])
 
 
-def create_enhanced_bayesian_network() -> EnhancedBayesianNetwork:
-    """Create an EnhancedBayesianNetwork instance."""
-    return EnhancedBayesianNetwork()
+def create_enhanced_bayesian_network(use_learnable_comorbidity: bool = False, device: Optional[str] = None) -> EnhancedBayesianNetwork:
+    """
+    Create an EnhancedBayesianNetwork instance.
+    
+    Args:
+        use_learnable_comorbidity: If True, use learnable comorbidity effects
+        device: Device for learnable parameters ('cpu' or 'cuda')
+        
+    Returns:
+        EnhancedBayesianNetwork instance
+    """
+    return EnhancedBayesianNetwork(use_learnable_comorbidity=use_learnable_comorbidity, device=device)
