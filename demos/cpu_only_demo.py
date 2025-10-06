@@ -43,8 +43,8 @@ print("\n✓ Step 4: Testing discriminator in CPU mode...")
 try:
     from phaita.models.discriminator import DiagnosisDiscriminator
     
-    # Create discriminator without pretrained models (CPU-friendly)
-    discriminator = DiagnosisDiscriminator(use_pretrained=False)
+    # Create discriminator (attempts ML first, falls back to lightweight CPU mode)
+    discriminator = DiagnosisDiscriminator()  # ML-first with graceful fallback
     print(f"  ✅ Discriminator instantiated (CPU mode)")
     print(f"     Text encoder: {discriminator.text_feature_dim} features")
     print(f"     Output classes: {discriminator.num_conditions}")

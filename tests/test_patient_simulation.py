@@ -33,7 +33,7 @@ def test_patient_presentation_metadata_consistency():
 def test_complaint_generator_follow_up_respects_vocabulary():
     random.seed(0)
     symptom_generator = SymptomGenerator()
-    complaint_generator = ComplaintGenerator(use_pretrained=False)
+    complaint_generator = ComplaintGenerator()  # ML-first, falls back to template mode if unavailable
 
     vocabulary = VocabularyProfile.default_for(["cough", "shortness_of_breath"])
     presentation = symptom_generator.generate_symptoms(

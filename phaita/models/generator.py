@@ -169,8 +169,25 @@ class ComplaintGenerator(nn.Module):
         self.template_mode = not use_pretrained
 
         if use_pretrained:
-            # Load LLM
-            self._load_llm(model_name, use_4bit)
+            # Try to load LLM, fall back to template mode if it fails
+            try:
+                self._load_llm(model_name, use_4bit)
+            except Exception as e:
+                logger.warning(
+                    f"⚠️  Failed to load pretrained model '{model_name}'. "
+                    f"Falling back to template-based generation. "
+                    f"Error: {type(e).__name__}: {str(e)[:200]}"
+                )
+                print(
+                    f"⚠️  Machine learning model unavailable. Using template-based generation instead.\n"
+                    f"   To use ML models, ensure:\n"
+                    f"   - Internet connection for model download\n"
+                    f"   - Sufficient memory (4GB+ VRAM for GPU, 16GB+ RAM for CPU)\n"
+                    f"   - Dependencies installed: pip install transformers bitsandbytes"
+                )
+                self.template_mode = True
+                self.model = None
+                self.tokenizer = None
 
     def reload_conditions(self, conditions: Optional[Dict[str, Dict]] = None) -> None:
         """Refresh the condition catalogue and vocabularies at runtime."""

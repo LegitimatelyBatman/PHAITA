@@ -173,7 +173,7 @@ def run_interview(
         random.seed(seed)
 
     simulator = simulator or PatientSimulator()
-    generator = complaint_generator or ComplaintGenerator(use_pretrained=False)
+    generator = complaint_generator or ComplaintGenerator()  # ML-first with graceful fallback
 
     if condition_code is None:
         condition_code, _ = RespiratoryConditions.get_random_condition()

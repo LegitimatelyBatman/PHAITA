@@ -7,10 +7,32 @@ PHAITA is a research prototype for medical triage that pits a language-model com
 ## Overview
 - **Scope**: Ten respiratory conditions (ICD-10) with lay-language support.
 - **Goal**: Stress-test diagnostic models with challenging, human-like complaints.
-- **Status**: Production-ready deep-learning pipeline requiring GPU acceleration and transformer models.
+- **Status**: Production-ready deep-learning pipeline with automatic fallback for constrained environments.
+- **ML-First Architecture**: All models attempt machine learning first, automatically falling back to lightweight alternatives if ML is unavailable.
 
 📦 **[Installation Guide](INSTALLATION.md)** - Detailed instructions for all installation methods (CPU-only, GPU, development, etc.)  
 ⚡ **[Quick Reference](INSTALL_QUICK_REF.md)** - One-line install commands and quick decision tree
+
+## Operating Modes
+
+PHAITA now features **ML-first with automatic fallback**:
+
+### Machine Learning Mode (Primary)
+- **Preferred**: Attempted by default for all models
+- **Requirements**: Internet connection, sufficient memory, dependencies installed
+- **Benefits**: Best quality and accuracy
+- **Activation**: Automatic (default behavior)
+
+### Fallback Mode (Automatic)
+- **Trigger**: ML unavailable (offline, low memory, missing dependencies)
+- **Behavior**: System prints warning and seamlessly continues with lightweight alternatives
+- **Quality**: Good accuracy and acceptable output quality
+- **Examples**:
+  - ComplaintGenerator → Template-based generation
+  - DiagnosisDiscriminator → Keyword-based classification
+  - QuestionGenerator → Template questions
+
+**You don't need to do anything special** - the system handles fallback automatically and informs you when it happens.
 
 ## System Requirements
 
@@ -77,14 +99,14 @@ pip install -e .[scraping]
 **Note**: GPU dependencies require CUDA. CPU-only environments should skip `requirements-gpu.txt` or use the base installation option.
 
 ### Models Used
-The following models are automatically downloaded from HuggingFace Hub:
+The following models are automatically downloaded from HuggingFace Hub when available:
 
-- **Mistral-7B-Instruct-v0.2** (~7GB): Complaint and question generation
-- **microsoft/deberta-v3-base** (~440MB): Text encoding for diagnosis
-- **Bio_ClinicalBERT** or **bert-base-uncased** (~420MB): Realism scoring
-- **GPT-2** (~500MB): Perplexity evaluation
+- **Mistral-7B-Instruct-v0.2** (~7GB): Complaint and question generation (falls back to templates)
+- **microsoft/deberta-v3-base** (~440MB): Text encoding for diagnosis (falls back to keyword matching)
+- **Bio_ClinicalBERT** or **bert-base-uncased** (~420MB): Realism scoring (falls back to simple metrics)
+- **GPT-2** (~500MB): Perplexity evaluation (optional)
 
-**Note**: All models are now **required**. Template-based fallbacks have been removed to ensure consistent behavior and quality.
+**Note**: All models are **attempted first** with automatic fallback. The system works in offline/constrained environments.
 
 ## Architecture Snapshot
 | Stage | Components | Purpose |

@@ -44,8 +44,8 @@ DEFAULT_QUESTION_MODEL = ModelConfig().mistral_model
 class QuestionGenerator(nn.Module):
     """
     Generates clarifying questions for interactive triage.
-    Uses Mistral-7B with 4-bit quantization.
-    Requires transformers and bitsandbytes to be installed.
+    Uses Mistral-7B with 4-bit quantization when available.
+    Falls back to template-based questions if ML model is unavailable.
     """
     
     def __init__(
@@ -62,32 +62,52 @@ class QuestionGenerator(nn.Module):
         
         Args:
             model_name: Name of the LLM to use
-            use_pretrained: Whether to load pretrained LLM (must be True)
+            use_pretrained: Whether to attempt loading pretrained LLM
             use_4bit: Whether to use 4-bit quantization (requires CUDA)
             max_new_tokens: Maximum tokens to generate
             temperature: Sampling temperature
             device: Device to load model on
-        
-        Raises:
-            ValueError: If use_pretrained is False
-            RuntimeError: If model loading fails
         """
         super().__init__()
-        
-        if not use_pretrained:
-            raise ValueError(
-                "QuestionGenerator requires use_pretrained=True. "
-                "Template-based fallback has been removed. "
-                "Ensure transformers and bitsandbytes are properly installed."
-            )
         
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.default_candidate_pool_size = 3
+        self.model = None
+        self.tokenizer = None
+        self.template_mode = not use_pretrained
+        
+        # Template fallback for when ML model is unavailable
+        self._question_index = 0
+        self._template_questions = [
+            "Could you describe when the symptoms first started?",
+            "Have you noticed anything that makes the symptoms better or worse?",
+            "Are there any other symptoms you haven't mentioned yet?",
+            "How severe would you rate your symptoms on a scale of 1-10?",
+            "Have you tried any treatments or medications for these symptoms?",
+        ]
 
-        # Load LLM
-        self._load_llm(model_name, use_4bit)
+        if use_pretrained:
+            # Try to load LLM, fall back to templates if it fails
+            try:
+                self._load_llm(model_name, use_4bit)
+            except Exception as e:
+                logger.warning(
+                    f"⚠️  Failed to load pretrained model '{model_name}'. "
+                    f"Falling back to template-based question generation. "
+                    f"Error: {type(e).__name__}: {str(e)[:200]}"
+                )
+                print(
+                    f"⚠️  Machine learning model unavailable. Using template-based question generation instead.\n"
+                    f"   To use ML models, ensure:\n"
+                    f"   - Internet connection for model download\n"
+                    f"   - Sufficient memory (4GB+ VRAM for GPU, 16GB+ RAM for CPU)\n"
+                    f"   - Dependencies installed: pip install transformers bitsandbytes"
+                )
+                self.template_mode = True
+                self.model = None
+                self.tokenizer = None
     
     def _load_llm(self, model_name: str, use_4bit: bool):
         """
@@ -174,6 +194,38 @@ class QuestionGenerator(nn.Module):
                 f"{requirements}"
             ) from e
     
+    def _generate_template_question(
+        self,
+        symptoms: List[str],
+        previous_questions: Optional[List[str]] = None
+    ) -> str:
+        """
+        Generate a question using simple templates (fallback mode).
+        
+        Args:
+            symptoms: List of symptoms
+            previous_questions: Previously asked questions
+            
+        Returns:
+            Template-based question string
+        """
+        # Use simple template rotation
+        if self._question_index < len(self._template_questions):
+            question = self._template_questions[self._question_index]
+            self._question_index += 1
+            return question
+        
+        # Generate symptom-specific questions after templates exhausted
+        if symptoms:
+            symptom_idx = (self._question_index - len(self._template_questions)) % len(symptoms)
+            symptom = symptoms[symptom_idx]
+            readable = symptom.replace("_", " ")
+            self._question_index += 1
+            return f"Could you share more details about the {readable}?"
+        
+        # Fallback if no symptoms
+        return "Can you describe any other symptoms or concerns you have?"
+    
     def _create_question_prompt(
         self,
         symptoms: List[str],
@@ -229,7 +281,7 @@ Question: [/INST]"""
         history: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
-        Generate question using LLM.
+        Generate question using LLM or template fallback.
         
         Args:
             symptoms: List of symptoms
@@ -239,15 +291,10 @@ Question: [/INST]"""
             
         Returns:
             Generated question string
-            
-        Raises:
-            RuntimeError: If LLM generation fails
         """
-        if self.model is None:
-            raise RuntimeError(
-                "Model not loaded. Ensure QuestionGenerator was initialized with use_pretrained=True "
-                "and model loaded successfully."
-            )
+        # Use template mode if model not available
+        if self.model is None or self.template_mode:
+            return self._generate_template_question(symptoms, previous_questions)
         
         try:
             asked_topics: Set[str] = set()

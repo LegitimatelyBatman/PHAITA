@@ -17,7 +17,7 @@ def test_complete_triage_workflow_asthma():
     # Step 1: Generate synthetic patient complaint
     print("\n1. Generating patient complaint...")
     symptom_gen = SymptomGenerator()
-    complaint_gen = ComplaintGenerator(use_pretrained=False)
+    complaint_gen = ComplaintGenerator()  # ML-first, falls back to template mode if unavailable
     
     presentation = symptom_gen.generate_symptoms("J45.9")  # Asthma
     presentation = complaint_gen.generate_complaint(presentation=presentation)
