@@ -193,35 +193,76 @@ python cli.py diagnose --complaint "I can't catch my breath" --detailed
 python cli.py challenge --rare-cases 5 --show-failures
 ```
 
-### Editing respiratory condition definitions
+### Editing Medical Configuration
 
-Respiratory conditions, symptoms, severity indicators, and lay-language vocabularies
-now live in [`config/respiratory_conditions.yaml`](config/respiratory_conditions.yaml).
-Clinicians can edit this file (or point the `PHAITA_RESPIRATORY_CONFIG`
-environment variable at an alternative path) without touching the Python code.
+PHAITA's medical knowledge is now centralized in physician-editable YAML files:
+
+#### Primary Configuration Files
+
+1. **`config/medical_knowledge.yaml`** - Consolidated medical knowledge (NEW!)
+   - Respiratory conditions with symptom probabilities
+   - Red-flag symptoms requiring immediate attention
+   - Comorbidity effects on symptom presentation
+   - Causal relationships between symptoms
+   - Temporal progression patterns
+
+2. **`config/system.yaml`** - Technical system configuration
+   - Model architecture settings
+   - Training parameters
+   - Data processing options
+   - Conversation and triage settings
+
+3. **`config/templates.yaml`** - Complaint generation templates
+
+#### Quick Edit Example
+
+Physicians can edit `config/medical_knowledge.yaml` to update medical knowledge:
 
 ```yaml
-J45.9:
-  name: Asthma
-  symptoms:
-    - wheezing
-    - shortness_of_breath
-  severity_indicators:
-    - unable_to_speak
-  lay_terms:
-    - "can't breathe"
-    - tight chest
-  description: Chronic inflammatory airway disease with episodic symptoms
+conditions:
+  J45.9:
+    name: Asthma
+    symptoms:
+      - wheezing
+      - shortness_of_breath
+    severity_indicators:
+      - unable_to_speak
+    lay_terms:
+      - "can't breathe"
+      - tight chest
+    description: Chronic inflammatory airway disease with episodic symptoms
+
+red_flags:
+  J45.9:  # Asthma
+    red_flags:
+      - severe_respiratory_distress
+      - unable_to_speak_full_sentences
+    symptoms:
+      - inability to speak more than a few words
+    escalation: Use a rescue inhaler immediately...
 ```
 
-After editing the file, long-running services can hot-reload the catalogue:
+#### Hot-Reloading
+
+After editing medical configuration, long-running services can hot-reload:
 
 ```python
 from phaita.data import RespiratoryConditions
 
-# Reload from disk (uses PHAITA_RESPIRATORY_CONFIG if set)
+# Reload from disk
 RespiratoryConditions.reload()
 ```
+
+#### Backward Compatibility
+
+For backward compatibility, PHAITA still supports individual config files:
+- `config/respiratory_conditions.yaml`
+- `config/red_flags.yaml`
+- `config/comorbidity_effects.yaml`
+- `config/symptom_causality.yaml`
+- `config/temporal_patterns.yaml`
+
+Use the `PHAITA_RESPIRATORY_CONFIG` environment variable to override the default configuration path.
 
 `BayesianSymptomNetwork`, `SymptomGenerator`, and `ComplaintGenerator` subscribe to
 these reload events automatically, so freshly authored conditions become available
@@ -294,35 +335,40 @@ history = trainer_learnable.train(num_epochs=100, batch_size=16)
 
 ## Repository Structure
 ```
-phaita/                # Core package (data, models, training, utils, conversation, triage)
-├── data/              # Medical conditions, forum scraping, synthetic generation
-├── models/            # Neural networks (generator, discriminator, Bayesian, GNN)
-├── training/          # Adversarial trainer
-├── utils/             # Config, metrics, model loader, realism scorer
-├── conversation/      # Dialogue engine, conversation flow
-└── triage/            # Diagnosis orchestrator, red-flags, escalation
+phaita/                       # Core package (data, models, training, utils, conversation, triage)
+├── data/                     # Medical conditions, forum scraping, synthetic generation
+├── models/                   # Neural networks (generator, discriminator, Bayesian, GNN)
+├── training/                 # Adversarial trainer
+├── utils/                    # Config, metrics, model loader, realism scorer
+├── conversation/             # Dialogue engine, conversation flow
+└── triage/                   # Diagnosis orchestrator, red-flags, escalation
 
-docs/                  # Documentation
-├── guides/            # Implementation and training guides (SOP)
-├── modules/           # Module-specific documentation
-├── updates/           # Consolidated update logs
-├── architecture/      # Architecture documentation
-└── features/          # Feature-specific guides
+docs/                         # Documentation
+├── guides/                   # Implementation and training guides (SOP, physician config)
+├── modules/                  # Module-specific documentation
+├── updates/                  # Consolidated update logs
+├── architecture/             # Architecture documentation
+└── features/                 # Feature-specific guides
 
-tests/                 # All test files (27 test scripts)
-demos/                 # Demo scripts (10 demos)
-config/                # YAML configuration files
-scripts/               # Utility scripts (forum scraping, profiling)
+tests/                        # All test files (27 test scripts)
+demos/                        # Demo scripts (10 demos)
 
-main.py                # Centralized entry point for common tasks ⭐ NEW
-cli.py                 # Command-line interface (advanced features)
-patient_cli.py         # Web interface
-config.yaml            # Main configuration file
-```
+config/                       # Configuration files ⭐ REORGANIZED
+├── system.yaml               # Technical system configuration (model, training, data)
+├── medical_knowledge.yaml    # Physician-editable medical knowledge (conditions, red-flags, etc.)
+├── templates.yaml            # Complaint generation templates
+├── respiratory_conditions.yaml  # Legacy: conditions only (backward compatibility)
+├── red_flags.yaml            # Legacy: red-flags only (backward compatibility)
+├── comorbidity_effects.yaml  # Legacy: comorbidity only (backward compatibility)
+├── symptom_causality.yaml    # Legacy: causality only (backward compatibility)
+└── temporal_patterns.yaml    # Legacy: temporal only (backward compatibility)
 
-cli.py                 # Command-line interface
-patient_cli.py         # Web interface
-config.yaml            # Main configuration file
+scripts/                      # Utility scripts (forum scraping, profiling)
+
+main.py                       # Centralized entry point for common tasks ⭐
+cli.py                        # Command-line interface (advanced features)
+patient_cli.py                # Web interface
+config.yaml                   # Legacy configuration file (backward compatibility)
 ```
 
 ## Testing

@@ -186,28 +186,59 @@ Complete guide to all PHAITA documentation.
 - Coverage summary
 - Integration with existing tests
 
-## Configuration Files
+## Configuration Files ⭐ **REORGANIZED**
 
-### Respiratory Conditions
+PHAITA's configuration has been refactored into a cleaner structure:
+
+### Primary Configuration Files (NEW!)
+
+#### System Configuration
+- **config/system.yaml** - Technical system configuration
+  - Model architecture (DeBERTa, Mistral, GNN settings)
+  - Training parameters (epochs, learning rates, batch size)
+  - Data processing options
+  - Conversation settings (max questions, confidence thresholds)
+  - Triage settings (diagnosis limits, escalation thresholds)
+
+#### Medical Knowledge (Physician-Editable)
+- **config/medical_knowledge.yaml** - Consolidated medical knowledge ⭐ **NEW**
+  - All physician-editable medical configuration in ONE file
+  - Includes: conditions, red_flags, comorbidity_effects, symptom_causality, temporal_patterns
+  - Hot-reload supported: `RespiratoryConditions.reload()`
+  - Environment variable: `PHAITA_RESPIRATORY_CONFIG` (can override)
+
+#### Templates
+- **config/templates.yaml** - Complaint generation templates
+  - 28 complaint templates with metadata
+  - Age ranges, severity, formality, symptom count
+  - Moved from phaita/data/ to config/
+
+### Legacy Configuration Files (Backward Compatibility)
+
+For backward compatibility, individual config files are still supported:
+
+#### Respiratory Conditions
 - **config/respiratory_conditions.yaml** - 10 ICD-10 respiratory conditions with symptoms, severity indicators, lay terms
 - Environment variable: `PHAITA_RESPIRATORY_CONFIG`
 - Hot-reload supported: `RespiratoryConditions.reload()`
 
-### Red-Flags
+#### Red-Flags
 - **config/red_flags.yaml** - Emergency symptom mappings for all 10 conditions
 - Used by DiagnosisOrchestrator for escalation level determination
 
-### Symptom Causality
+#### Symptom Causality
 - **config/symptom_causality.yaml** - Causal and temporal edges between symptoms
 - Used by SymptomGraphBuilder for GNN construction
 
-### Comorbidity Effects
+#### Comorbidity Effects
 - **config/comorbidity_effects.yaml** - 8 comorbidities with symptom modifiers and interactions
 - Used by EnhancedBayesianNetwork for realistic symptom modulation
 
-### Templates
-- **phaita/data/templates.yaml** - 28 complaint generation templates
-- Metadata: age ranges, severity, formality, symptom count
+#### Temporal Patterns
+- **config/temporal_patterns.yaml** - Typical symptom progression timelines by condition
+- Used by TemporalPatternMatcher for timeline scoring
+
+**Note**: Legacy files are still loaded if medical_knowledge.yaml is not present, ensuring backward compatibility.
 
 ## Quick Navigation by Task
 
@@ -243,13 +274,16 @@ Complete guide to all PHAITA documentation.
 3. [docs/modules/TRIAGE_MODULE.md](modules/TRIAGE_MODULE.md) - Diagnosis orchestration
 4. [TESTING_MULTI_TURN_DIALOGUES.md](TESTING_MULTI_TURN_DIALOGUES.md) - Test examples
 
-#### Customize medical knowledge
+#### Customize medical knowledge ⭐ **UPDATED**
 1. [docs/guides/PHYSICIAN_CONFIGURATION_GUIDE.md](guides/PHYSICIAN_CONFIGURATION_GUIDE.md) - Step-by-step guide for physicians
-2. Edit: `config/respiratory_conditions.yaml`
-3. Edit: `config/red_flags.yaml`
-4. Edit: `config/comorbidity_effects.yaml`
-5. Edit: `config/symptom_causality.yaml`
-6. See: [docs/modules/DATA_MODULE.md](modules/DATA_MODULE.md) - Configuration guide
+2. **Primary**: Edit `config/medical_knowledge.yaml` (consolidated configuration)
+3. **Alternative**: Edit individual legacy files:
+   - `config/respiratory_conditions.yaml`
+   - `config/red_flags.yaml`
+   - `config/comorbidity_effects.yaml`
+   - `config/symptom_causality.yaml`
+   - `config/temporal_patterns.yaml`
+4. See: [docs/modules/DATA_MODULE.md](modules/DATA_MODULE.md) - Configuration guide
 
 #### Add new features
 1. [docs/modules/IMPLEMENTATION_SUMMARY.md](modules/IMPLEMENTATION_SUMMARY.md) - Module organization
