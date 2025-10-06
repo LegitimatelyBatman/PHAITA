@@ -295,3 +295,156 @@ class TemporalPatternMatcher:
             return 0.0
         
         return correct_pairs / total_pairs
+
+
+class LearnableTemporalPatternMatcher(nn.Module if TORCH_AVAILABLE else object):
+    """Learnable neural network for temporal pattern matching.
+    
+    Replaces the heuristic-based TemporalPatternMatcher with a trainable model
+    that uses the TemporalSymptomEncoder (LSTM) to learn temporal patterns from data.
+    
+    This model can be initialized with clinical knowledge from temporal_patterns.yaml
+    and then fine-tuned on real data to improve temporal matching accuracy.
+    
+    Args:
+        num_conditions: Number of respiratory conditions to classify
+        symptom_vocab_size: Size of symptom vocabulary
+        symptom_embedding_dim: Dimension of symptom embeddings (default: 64)
+        hidden_dim: LSTM hidden dimension (default: 128)
+        num_layers: Number of LSTM layers (default: 2)
+        dropout: Dropout probability (default: 0.1)
+        temporal_patterns: Optional dict of temporal patterns for initialization
+        condition_codes: List of condition codes in order (for label mapping)
+    
+    Raises:
+        ImportError: If torch is not available
+    """
+    
+    def __init__(
+        self,
+        num_conditions: int,
+        symptom_vocab_size: int,
+        symptom_embedding_dim: int = 64,
+        hidden_dim: int = 128,
+        num_layers: int = 2,
+        dropout: float = 0.1,
+        temporal_patterns: Optional[Dict[str, Dict]] = None,
+        condition_codes: Optional[List[str]] = None,
+    ):
+        if not TORCH_AVAILABLE:
+            raise ImportError(
+                "PyTorch is required for LearnableTemporalPatternMatcher. "
+                "Install with: pip install torch"
+            )
+        
+        super().__init__()
+        
+        self.num_conditions = num_conditions
+        self.symptom_vocab_size = symptom_vocab_size
+        self.hidden_dim = hidden_dim
+        self.temporal_patterns = temporal_patterns or {}
+        self.condition_codes = condition_codes or []
+        
+        # Create mapping from condition code to index
+        self.condition_to_idx = {code: idx for idx, code in enumerate(self.condition_codes)}
+        
+        # Core LSTM encoder for temporal sequences
+        self.temporal_encoder = TemporalSymptomEncoder(
+            symptom_vocab_size=symptom_vocab_size,
+            symptom_embedding_dim=symptom_embedding_dim,
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            dropout=dropout,
+        )
+        
+        # Classification head to predict condition from temporal embedding
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, num_conditions),
+        )
+        
+        # Initialize with clinical knowledge if patterns provided
+        if temporal_patterns and condition_codes:
+            self._initialize_from_patterns()
+    
+    def _initialize_from_patterns(self):
+        """Initialize model weights using clinical knowledge from temporal patterns.
+        
+        This gives the model a strong starting point based on known disease progressions
+        before any training on real data.
+        """
+        # For now, use default initialization
+        # In future, could use patterns to pre-train or bias the model
+        pass
+    
+    def forward(
+        self,
+        symptom_indices: torch.Tensor,
+        timestamps: torch.Tensor,
+    ) -> torch.Tensor:
+        """Forward pass to predict condition probabilities from symptom timeline.
+        
+        Args:
+            symptom_indices: Tensor of symptom indices [batch_size, seq_len]
+            timestamps: Tensor of timestamps in hours [batch_size, seq_len]
+            
+        Returns:
+            Logits for each condition [batch_size, num_conditions]
+        """
+        # Encode temporal sequence
+        temporal_embedding = self.temporal_encoder(symptom_indices, timestamps)
+        
+        # Classify condition
+        logits = self.classifier(temporal_embedding)
+        
+        return logits
+    
+    def predict_condition(
+        self,
+        symptom_indices: torch.Tensor,
+        timestamps: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Predict condition and return probabilities.
+        
+        Args:
+            symptom_indices: Tensor of symptom indices [batch_size, seq_len]
+            timestamps: Tensor of timestamps in hours [batch_size, seq_len]
+            
+        Returns:
+            Tuple of (predicted_indices, probabilities)
+        """
+        logits = self.forward(symptom_indices, timestamps)
+        probs = torch.softmax(logits, dim=-1)
+        predicted_indices = torch.argmax(probs, dim=-1)
+        
+        return predicted_indices, probs
+    
+    def score_timeline(
+        self,
+        symptom_indices: torch.Tensor,
+        timestamps: torch.Tensor,
+        condition_code: str,
+    ) -> float:
+        """Score how well a timeline matches a specific condition.
+        
+        Provides compatibility with the original TemporalPatternMatcher interface.
+        
+        Args:
+            symptom_indices: Tensor of symptom indices [1, seq_len]
+            timestamps: Tensor of timestamps in hours [1, seq_len]
+            condition_code: ICD-10 condition code to score
+            
+        Returns:
+            Score between 0.0 and 1.0 indicating match quality
+        """
+        if condition_code not in self.condition_to_idx:
+            return 0.5  # Neutral score for unknown condition
+        
+        with torch.no_grad():
+            _, probs = self.predict_condition(symptom_indices, timestamps)
+            condition_idx = self.condition_to_idx[condition_code]
+            score = probs[0, condition_idx].item()
+        
+        return score

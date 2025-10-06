@@ -135,8 +135,10 @@ class AdversarialTrainer:
                  use_learnable_bayesian: bool = False,
                  use_learnable_comorbidity: bool = False,
                  use_learnable_causality: bool = False,
+                 use_learnable_temporal: bool = False,
                  comorbidity_lr: float = 1e-3,
                  causality_lr: float = 1e-3,
+                 temporal_lr: float = 1e-3,
                  device: Optional[str] = None,
                  real_dataset: Optional[List[Dict[str, Any]]] = None):
         
@@ -169,6 +171,51 @@ class AdversarialTrainer:
             except ImportError:
                 self.logger.warning("Learnable causality requested but module not available")
                 self.use_learnable_causality = False
+        
+        # Initialize learnable temporal pattern matcher
+        self.use_learnable_temporal = use_learnable_temporal and TORCH_AVAILABLE
+        self.temporal_model = None
+        if self.use_learnable_temporal:
+            try:
+                import yaml
+                from pathlib import Path
+                from ..models.temporal_module import LearnableTemporalPatternMatcher
+                
+                # Load temporal patterns from config
+                config_path = Path(__file__).parent.parent.parent / "config" / "temporal_patterns.yaml"
+                if config_path.exists():
+                    with open(config_path) as f:
+                        temporal_patterns = yaml.safe_load(f)
+                else:
+                    temporal_patterns = {}
+                    self.logger.warning("temporal_patterns.yaml not found")
+                
+                # Get condition codes
+                condition_codes = list(RespiratoryConditions.get_all_conditions().keys())
+                
+                # Build symptom vocabulary from Bayesian network
+                symptom_vocab = set()
+                for code in condition_codes:
+                    symptoms = self.bayesian_network.sample_symptoms(code)
+                    symptom_vocab.update(symptoms)
+                symptom_vocab = sorted(list(symptom_vocab))
+                symptom_vocab_size = len(symptom_vocab) + 1  # +1 for padding
+                
+                # Create symptom to index mapping
+                self.symptom_to_idx = {symptom: idx + 1 for idx, symptom in enumerate(symptom_vocab)}
+                self.symptom_to_idx['<PAD>'] = 0
+                
+                self.temporal_model = LearnableTemporalPatternMatcher(
+                    num_conditions=len(condition_codes),
+                    symptom_vocab_size=symptom_vocab_size,
+                    temporal_patterns=temporal_patterns,
+                    condition_codes=condition_codes,
+                ).to(self.device)
+                
+                self.logger.info(f"Initialized learnable temporal model with {symptom_vocab_size} symptoms")
+            except Exception as e:
+                self.logger.warning(f"Learnable temporal requested but initialization failed: {e}")
+                self.use_learnable_temporal = False
         
         # Initialize Bayesian network (learnable or standard)
         self.use_learnable_bayesian = use_learnable_bayesian and TORCH_AVAILABLE
@@ -251,12 +298,25 @@ class AdversarialTrainer:
         else:
             self.causality_optimizer = None
         
+        # Initialize temporal optimizer if using learnable mode
+        if self.use_learnable_temporal and self.temporal_model is not None:
+            self.temporal_optimizer = AdamW(
+                self.temporal_model.parameters(),
+                lr=temporal_lr,
+                weight_decay=0.01
+            )
+            self.temporal_loss = nn.CrossEntropyLoss()
+        else:
+            self.temporal_optimizer = None
+            self.temporal_loss = None
+        
         # Learning rate schedulers (will be initialized in train())
         self.gen_scheduler = None
         self.disc_scheduler = None
         self.bayesian_scheduler = None
         self.comorbidity_scheduler = None
         self.causality_scheduler = None
+        self.temporal_scheduler = None
         
         # Gradient clipping
         self.max_grad_norm = 1.0
@@ -697,6 +757,9 @@ class AdversarialTrainer:
         if self.use_learnable_bayesian and self.bayesian_optimizer is not None:
             self.bayesian_scheduler = CosineAnnealingLR(self.bayesian_optimizer, T_max=num_epochs)
         
+        if self.use_learnable_temporal and self.temporal_optimizer is not None:
+            self.temporal_scheduler = CosineAnnealingLR(self.temporal_optimizer, T_max=num_epochs)
+        
         for epoch in range(num_epochs):
             epoch_losses = defaultdict(float)
             
@@ -741,6 +804,12 @@ class AdversarialTrainer:
                     for key, value in bayesian_losses.items():
                         epoch_losses[key] += value
                 
+                # Train temporal pattern matcher if using learnable mode
+                if self.use_learnable_temporal and step % 3 == 0:
+                    temporal_losses = self.train_temporal_step(batch_size)
+                    for key, value in temporal_losses.items():
+                        epoch_losses[key] += value
+                
                 for key, value in disc_losses.items():
                     epoch_losses[key] += value
             
@@ -754,6 +823,8 @@ class AdversarialTrainer:
             self.disc_scheduler.step()
             if self.use_learnable_bayesian and self.bayesian_scheduler is not None:
                 self.bayesian_scheduler.step()
+            if self.use_learnable_temporal and self.temporal_scheduler is not None:
+                self.temporal_scheduler.step()
             
             # Enhanced logging and evaluation
             if epoch % eval_interval == 0:
@@ -854,6 +925,149 @@ class AdversarialTrainer:
         )
         
         return loss_components
+    
+    def generate_temporal_training_data(
+        self, batch_size: int
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Generate temporal training data: symptom timelines with condition labels.
+        
+        Args:
+            batch_size: Number of temporal sequences to generate
+            
+        Returns:
+            Tuple of (symptom_indices, timestamps, condition_labels)
+                - symptom_indices: [batch_size, max_seq_len] tensor of symptom indices
+                - timestamps: [batch_size, max_seq_len] tensor of timestamps in hours
+                - condition_labels: [batch_size] tensor of condition label indices
+        """
+        import yaml
+        from pathlib import Path
+        
+        # Load temporal patterns if not already loaded
+        if not hasattr(self, '_temporal_patterns_cache'):
+            config_path = Path(__file__).parent.parent.parent / "config" / "temporal_patterns.yaml"
+            if config_path.exists():
+                with open(config_path) as f:
+                    self._temporal_patterns_cache = yaml.safe_load(f)
+            else:
+                self._temporal_patterns_cache = {}
+        
+        temporal_patterns = self._temporal_patterns_cache
+        
+        # Prepare lists for batch
+        all_symptom_indices = []
+        all_timestamps = []
+        all_condition_labels = []
+        
+        for _ in range(batch_size):
+            # Randomly select a condition
+            condition_code = random.choice(self.condition_codes)
+            condition_idx = self.temporal_model.condition_to_idx[condition_code]
+            
+            # Get the typical progression pattern for this condition
+            if condition_code in temporal_patterns:
+                pattern = temporal_patterns[condition_code].get('typical_progression', [])
+            else:
+                # Fallback: sample symptoms from Bayesian network
+                symptoms = self.bayesian_network.sample_symptoms(condition_code)
+                pattern = [
+                    {'symptom': symptom, 'onset_hour': i * 12}
+                    for i, symptom in enumerate(symptoms)
+                ]
+            
+            # Add some noise to the progression
+            symptom_indices = []
+            timestamps = []
+            
+            for event in pattern:
+                symptom = event['symptom']
+                base_time = event['onset_hour']
+                
+                # Add timing noise (±6 hours)
+                noisy_time = base_time + random.uniform(-6, 6)
+                noisy_time = max(0, noisy_time)  # Ensure non-negative
+                
+                # Convert symptom to index
+                if symptom in self.symptom_to_idx:
+                    symptom_idx = self.symptom_to_idx[symptom]
+                    symptom_indices.append(symptom_idx)
+                    timestamps.append(noisy_time)
+            
+            # Ensure we have at least one symptom
+            if not symptom_indices:
+                # Use a default symptom
+                symptom_indices = [1]  # Use index 1 (first non-padding symptom)
+                timestamps = [0.0]
+            
+            all_symptom_indices.append(symptom_indices)
+            all_timestamps.append(timestamps)
+            all_condition_labels.append(condition_idx)
+        
+        # Pad sequences to same length
+        max_len = max(len(seq) for seq in all_symptom_indices)
+        
+        padded_symptom_indices = []
+        padded_timestamps = []
+        
+        for symptom_seq, time_seq in zip(all_symptom_indices, all_timestamps):
+            # Pad with 0 (padding index)
+            padded_symptoms = symptom_seq + [0] * (max_len - len(symptom_seq))
+            padded_times = time_seq + [0.0] * (max_len - len(time_seq))
+            
+            padded_symptom_indices.append(padded_symptoms)
+            padded_timestamps.append(padded_times)
+        
+        # Convert to tensors
+        symptom_indices_tensor = torch.tensor(padded_symptom_indices, dtype=torch.long, device=self.device)
+        timestamps_tensor = torch.tensor(padded_timestamps, dtype=torch.float, device=self.device)
+        condition_labels_tensor = torch.tensor(all_condition_labels, dtype=torch.long, device=self.device)
+        
+        return symptom_indices_tensor, timestamps_tensor, condition_labels_tensor
+    
+    def train_temporal_step(self, batch_size: int) -> Dict[str, float]:
+        """
+        Train learnable temporal pattern matcher for one step.
+        
+        Args:
+            batch_size: Number of temporal sequences to generate
+            
+        Returns:
+            Dictionary of loss values
+        """
+        if not self.use_learnable_temporal or self.temporal_optimizer is None:
+            return {}
+        
+        self.temporal_model.train()
+        self.temporal_optimizer.zero_grad()
+        
+        # Generate temporal training data
+        symptom_indices, timestamps, condition_labels = self.generate_temporal_training_data(batch_size)
+        
+        # Forward pass
+        logits = self.temporal_model(symptom_indices, timestamps)
+        
+        # Compute loss
+        loss = self.temporal_loss(logits, condition_labels)
+        
+        # Backward pass
+        loss.backward()
+        
+        # Gradient clipping
+        torch.nn.utils.clip_grad_norm_(self.temporal_model.parameters(), self.max_grad_norm)
+        
+        # Update weights
+        self.temporal_optimizer.step()
+        
+        # Compute accuracy for monitoring
+        with torch.no_grad():
+            predictions = torch.argmax(logits, dim=-1)
+            accuracy = (predictions == condition_labels).float().mean().item()
+        
+        return {
+            'temporal_loss': loss.item(),
+            'temporal_accuracy': accuracy,
+        }
     
     def _compute_epoch_diversity_metrics(self, complaints: List[str]) -> Dict[str, float]:
         """Compute diversity metrics for current epoch."""
