@@ -87,86 +87,94 @@ class DiagnosisDiscriminator(nn.Module):
         RespiratoryConditions.register_reload_hook(self.reload_conditions)
 
         if self.use_pretrained:
+            # Try to load ML models, fall back to lite mode if they fail
+            ml_load_failed = False
+            ml_error_message = ""
+            
             try:
                 from transformers import AutoModel, AutoTokenizer  # type: ignore
             except ImportError as e:
-                raise ImportError(
-                    "transformers is required when use_pretrained=True. "
-                    f"{format_install_instruction('transformers', TRANSFORMERS_VERSION)}\n"
-                    "GPU Requirements: CUDA-capable GPU with 4GB+ VRAM recommended for full functionality. "
-                    "CPU-only mode available but slower."
-                ) from e
+                ml_load_failed = True
+                ml_error_message = f"transformers not available: {e}"
+                logger.warning(f"⚠️  {ml_error_message}")
 
-            # Initialize text encoder (DeBERTa) with retry logic
-            try:
-                self.text_encoder, self.tokenizer = load_model_and_tokenizer(
-                    model_name=model_name,
-                    model_type="auto",
-                    max_retries=3,
-                    timeout=300
-                )
-                self.text_feature_dim = self.text_encoder.config.hidden_size  # 768 for base
-
-                if freeze_encoder:
-                    for param in self.text_encoder.parameters():
-                        param.requires_grad = False
-            except ModelDownloadError as e:
-                requirements = format_transformer_requirements(
-                    internet_note="- Internet connection to download model from HuggingFace Hub"
-                )
-                raise RuntimeError(
-                    f"Failed to load text encoder {model_name}. "
-                    f"{e}\n"
-                    f"{requirements}"
-                ) from e
-            except Exception as e:
-                requirements = format_transformer_requirements(
-                    internet_note="- Internet connection to download model from HuggingFace Hub"
-                )
-                raise RuntimeError(
-                    f"Failed to load text encoder {model_name}. "
-                    f"Error: {e}\n"
-                    f"{requirements}"
-                ) from e
-
-            # Initialize GNN for symptom relationships lazily
-            global SymptomGraphModule
-            if SymptomGraphModule is None:
+            if not ml_load_failed:
+                # Initialize text encoder (DeBERTa) with retry logic
                 try:
-                    from .gnn_module import SymptomGraphModule as _SymptomGraphModule  # type: ignore
-                    SymptomGraphModule = _SymptomGraphModule
-                except ImportError as e:
-                    raise ImportError(
-                        "torch-geometric is required when use_pretrained=True to construct the GNN module. "
-                        "Install with: pip install torch-geometric==2.6.1"
-                    ) from e
+                    self.text_encoder, self.tokenizer = load_model_and_tokenizer(
+                        model_name=model_name,
+                        model_type="auto",
+                        max_retries=3,
+                        timeout=300
+                    )
+                    self.text_feature_dim = self.text_encoder.config.hidden_size  # 768 for base
 
-            try:
-                assert SymptomGraphModule is not None  # for type checkers
-                self.gnn = SymptomGraphModule(
-                    conditions=self.conditions,
-                    hidden_dim=gnn_hidden_dim,
-                    output_dim=gnn_output_dim,
-                    dropout=dropout,
-                    use_causal_edges=use_causal_edges,
-                    learnable_causality=learnable_causality
+                    if freeze_encoder:
+                        for param in self.text_encoder.parameters():
+                            param.requires_grad = False
+                except Exception as e:
+                    ml_load_failed = True
+                    ml_error_message = f"Failed to load text encoder: {type(e).__name__}: {str(e)[:200]}"
+                    logger.warning(f"⚠️  {ml_error_message}")
+
+            if not ml_load_failed:
+                # Initialize GNN for symptom relationships lazily
+                global SymptomGraphModule
+                if SymptomGraphModule is None:
+                    try:
+                        from .gnn_module import SymptomGraphModule as _SymptomGraphModule  # type: ignore
+                        SymptomGraphModule = _SymptomGraphModule
+                    except ImportError as e:
+                        ml_load_failed = True
+                        ml_error_message = f"torch-geometric not available: {e}"
+                        logger.warning(f"⚠️  {ml_error_message}")
+
+                if not ml_load_failed:
+                    try:
+                        assert SymptomGraphModule is not None  # for type checkers
+                        self.gnn = SymptomGraphModule(
+                            conditions=self.conditions,
+                            hidden_dim=gnn_hidden_dim,
+                            output_dim=gnn_output_dim,
+                            dropout=dropout,
+                            use_causal_edges=use_causal_edges,
+                            learnable_causality=learnable_causality
+                        )
+                        self.graph_feature_dim = gnn_output_dim
+                    except Exception as e:
+                        ml_load_failed = True
+                        ml_error_message = f"Failed to initialize GNN: {type(e).__name__}: {str(e)[:200]}"
+                        logger.warning(f"⚠️  {ml_error_message}")
+            
+            if ml_load_failed:
+                # Fall back to lite mode
+                logger.warning(
+                    f"⚠️  Machine learning models unavailable. Falling back to lightweight keyword-based mode."
                 )
-                self.graph_feature_dim = gnn_output_dim
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to initialize GNN module. "
-                    f"Error: {e}\n"
-                    f"Requirements:\n"
-                    f"- torch-geometric==2.6.1\n"
-                    f"- torch==2.5.1"
-                ) from e
-        else:
+                print(
+                    f"⚠️  Machine learning models unavailable. Using lightweight keyword-based classification instead.\n"
+                    f"   Reason: {ml_error_message}\n"
+                    f"   To use ML models, ensure:\n"
+                    f"   - Internet connection for model download\n"
+                    f"   - Sufficient memory (4GB+ VRAM for GPU, 16GB+ RAM for CPU)\n"
+                    f"   - Dependencies installed: pip install transformers torch-geometric"
+                )
+                self.use_pretrained = False
+                self.vocab_extractor = VocabularyFeatureExtractor(self.conditions)
+                self.text_feature_dim = self.num_conditions
+                self.graph_feature_dim = 0
+                self.text_encoder = None
+                self.tokenizer = None
+                self.gnn = None
+        
+        if not self.use_pretrained:
             # Lightweight keyword-matching encoder fallback. Provides a
             # deterministic feature representation that keeps unit tests
             # dependency-free while preserving downstream behaviour.
-            self.vocab_extractor = VocabularyFeatureExtractor(self.conditions)
-            self.text_feature_dim = self.num_conditions
-            self.graph_feature_dim = 0
+            if self.vocab_extractor is None:
+                self.vocab_extractor = VocabularyFeatureExtractor(self.conditions)
+                self.text_feature_dim = self.num_conditions
+                self.graph_feature_dim = 0
 
         # Fusion layer (combines text + graph features)
         combined_dim = self.text_feature_dim + self.graph_feature_dim
