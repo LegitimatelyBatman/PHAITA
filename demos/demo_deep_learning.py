@@ -25,9 +25,9 @@ def demo_discriminator():
     """Demonstrate the discriminator with DeBERTa + GNN."""
     print_section("1. DiagnosisDiscriminator (DeBERTa + GNN)")
     
-    # Initialize (without pretrained for faster demo)
+    # Initialize (ML-first, will fall back to lightweight mode if models unavailable)
     print("\n📊 Initializing discriminator...")
-    disc = DiagnosisDiscriminator(use_pretrained=False)
+    disc = DiagnosisDiscriminator()  # Attempts ML first, falls back gracefully
     
     param_count = sum(p.numel() for p in disc.parameters())
     print(f"✓ Loaded discriminator with {param_count:,} parameters")
@@ -70,10 +70,11 @@ def demo_generator():
     
     print("\n📝 Initializing generators...")
     symptom_gen = SymptomGenerator()
-    complaint_gen = ComplaintGenerator(use_pretrained=False)  # Template mode
+    complaint_gen = ComplaintGenerator()  # ML-first, falls back to template mode if needed
     
     param_count = sum(p.numel() for p in complaint_gen.parameters())
-    print(f"✓ Loaded generator with {param_count:,} parameters (template mode)")
+    mode_msg = "template mode" if complaint_gen.template_mode else "ML mode"
+    print(f"✓ Loaded generator with {param_count:,} parameters ({mode_msg})")
     
     print("\n🎲 Generating complaints for different conditions:")
     conditions = [
@@ -101,10 +102,11 @@ def demo_question_generator():
     print_section("3. QuestionGenerator (Dynamic Triage)")
     
     print("\n❓ Initializing question generator...")
-    qgen = QuestionGenerator(use_pretrained=False)
+    qgen = QuestionGenerator()  # ML-first, falls back to template mode if needed
     
     param_count = sum(p.numel() for p in qgen.parameters())
-    print(f"✓ Loaded question generator with {param_count:,} parameters")
+    mode_msg = "template mode" if qgen.template_mode else "ML mode"
+    print(f"✓ Loaded question generator with {param_count:,} parameters ({mode_msg})")
     
     print("\n💬 Generating clarifying questions:")
     symptom_sets = [
@@ -151,7 +153,7 @@ def demo_integrated_pipeline():
     # Step 1: Generate synthetic complaint
     print("\n  Step 1: Generate patient complaint")
     symptom_gen = SymptomGenerator()
-    complaint_gen = ComplaintGenerator(use_pretrained=False)
+    complaint_gen = ComplaintGenerator()  # ML-first, falls back if needed
     
     presentation = symptom_gen.generate_symptoms("J45.9")
     presentation = complaint_gen.generate_complaint(presentation=presentation)
@@ -167,7 +169,7 @@ def demo_integrated_pipeline():
 
     # Step 3: Predict diagnosis
     print("\n  Step 3: Predict diagnosis")
-    disc = DiagnosisDiscriminator(use_pretrained=False)
+    disc = DiagnosisDiscriminator()  # ML-first, falls back if needed
     code, confidence, explanation = disc.predict_with_explanation(
         presentation.complaint_text
     )
@@ -176,7 +178,7 @@ def demo_integrated_pipeline():
 
     # Step 4: Generate follow-up question
     print("\n  Step 4: Generate follow-up question")
-    qgen = QuestionGenerator(use_pretrained=False)
+    qgen = QuestionGenerator()  # ML-first, falls back if needed
     question = qgen.generate_clarifying_question(presentation.symptoms)
     print(f"    Question: {question}")
     
@@ -190,35 +192,43 @@ def demo_model_statistics():
     print("\n📊 Model Details:")
     
     # Discriminator
-    disc = DiagnosisDiscriminator(use_pretrained=False)
+    disc = DiagnosisDiscriminator()  # ML-first, falls back if needed
     disc_params = sum(p.numel() for p in disc.parameters())
+    disc_mode = "lightweight" if not disc.use_pretrained else "ML"
     print(f"\n  DiagnosisDiscriminator:")
     print(f"    Parameters: {disc_params:,}")
-    print(f"    Architecture: DeBERTa (768d) + GNN (256d) + Fusion")
+    print(f"    Mode: {disc_mode}")
+    print(f"    Architecture: {'Keyword-based' if not disc.use_pretrained else 'DeBERTa (768d) + GNN (256d) + Fusion'}")
     print(f"    Outputs: 10 diagnosis classes + real/fake score")
     
     # Generator
-    gen = ComplaintGenerator(use_pretrained=False)
+    gen = ComplaintGenerator()  # ML-first, falls back if needed
     gen_params = sum(p.numel() for p in gen.parameters())
+    gen_mode = "template" if gen.template_mode else "ML"
     print(f"\n  ComplaintGenerator:")
-    print(f"    Parameters: {gen_params:,} (template mode)")
-    print(f"    Note: Can use Mistral-7B (~7B params) when use_pretrained=True")
-    print(f"    Templates: 8 grammatically-correct patterns")
+    print(f"    Parameters: {gen_params:,} ({gen_mode} mode)")
+    if gen.template_mode:
+        print(f"    Note: Can use Mistral-7B (~7B params) with internet connection")
+        print(f"    Templates: 8 grammatically-correct patterns")
+    else:
+        print(f"    Model: Mistral-7B-Instruct")
     
     # Question Generator
-    qgen = QuestionGenerator(use_pretrained=False)
+    qgen = QuestionGenerator()  # ML-first, falls back if needed
     qgen_params = sum(p.numel() for p in qgen.parameters())
+    qgen_mode = "template" if qgen.template_mode else "ML"
     print(f"\n  QuestionGenerator:")
     print(f"    Parameters: {qgen_params:,}")
-    print(f"    Mode: Template-based (can use LLM)")
+    print(f"    Mode: {qgen_mode}")
     
     # Total
     total_params = disc_params + gen_params + qgen_params
-    print(f"\n  Total (without LLMs): {total_params:,} parameters")
-    print(f"  Total (with LLMs): ~7.004M parameters")
+    print(f"\n  Total: {total_params:,} parameters")
+    if gen.template_mode or not disc.use_pretrained:
+        print(f"  Note: Running in fallback mode. With ML models: ~7.004M parameters")
     
     print("\n💾 Memory Usage:")
-    print(f"    CPU mode (no pretrained): ~100 MB")
+    print(f"    CPU mode (fallback): ~100 MB")
     print(f"    GPU mode (pretrained DeBERTa): ~1.5 GB")
     print(f"    GPU mode (+ Mistral-7B 4-bit): ~5 GB")
 
@@ -230,9 +240,10 @@ def main():
     print("  Real DeBERTa + GNN + Mistral-7B Integration")
     print("=" * 70)
     
-    print("\nℹ️  Note: Running in template mode (use_pretrained=False)")
-    print("   Set use_pretrained=True to use DeBERTa and Mistral-7B")
-    print("   Requires GPU and ~5GB VRAM for optimal performance")
+    print("\nℹ️  Note: Models attempt ML-first, fall back gracefully if unavailable")
+    print("   For full ML experience, ensure:")
+    print("   - Internet connection for model downloads")
+    print("   - GPU with ~5GB VRAM (or 16GB+ RAM for CPU)")
     
     try:
         demo_discriminator()
