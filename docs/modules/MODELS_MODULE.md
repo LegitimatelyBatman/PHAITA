@@ -6,6 +6,8 @@
 
 The models module contains all neural network architectures and machine learning components, including the discriminator, generator, Bayesian networks, GNN modules, and question generation.
 
+**ML-First Architecture:** All models default to attempting machine learning first, with automatic graceful fallback to lightweight CPU-friendly alternatives if ML models are unavailable (e.g., offline, insufficient memory, missing dependencies).
+
 ## Components
 
 ### 1. Generator (`generator.py`)
@@ -16,29 +18,34 @@ The models module contains all neural network architectures and machine learning
 - `ComplaintGenerator` - Main generator interface
 - `SymptomGenerator` - Generate symptom lists
 
-**Dual-Mode Architecture:**
+**Dual-Mode Architecture with Automatic Fallback:**
 
-#### Mode 1: Full Deep Learning (GPU)
+#### Mode 1: Machine Learning (Primary)
 - **Model:** Mistral-7B instruction-tuned
 - **Quantization:** 4-bit with bitsandbytes
-- **VRAM:** ~4GB required
+- **VRAM:** ~4GB required (or 16GB+ RAM for CPU)
 - **Quality:** High-quality natural narratives
+- **Activation:** Automatically attempted by default
 
-#### Mode 2: Template Fallback (CPU)
+#### Mode 2: Template Fallback (Automatic)
 - **Model:** Enhanced template system
 - **Parameters:** 512 learnable parameters
 - **Memory:** <100MB
 - **Quality:** Good grammar, diverse templates
+- **Activation:** Automatic fallback when ML unavailable
 
 **Usage:**
 ```python
 from phaita.models.generator import ComplaintGenerator
 
-# Initialize (auto-detects GPU/CPU)
-generator = ComplaintGenerator(
-    use_pretrained=True,  # Try Mistral-7B, fall back to templates
-    device="auto"
-)
+# Initialize (ML-first with automatic fallback)
+generator = ComplaintGenerator()  # Attempts Mistral-7B, falls back to templates if needed
+
+# The system will:
+# 1. Try to load Mistral-7B with retries
+# 2. Print warning if ML unavailable
+# 3. Automatically fall back to template mode
+# 4. Continue working seamlessly
 
 # Generate complaint
 complaint = generator.generate_complaint(
@@ -53,7 +60,7 @@ print(complaint)
 
 **Configuration:**
 - `model_name`: Transformer model (default: "mistralai/Mistral-7B-Instruct-v0.2")
-- `use_pretrained`: Use transformer vs templates
+- `use_pretrained`: Whether to attempt ML (default: True - ML-first)
 - `quantization`: "4bit", "8bit", or None
 - `max_length`: Max output tokens
 - `temperature`: Sampling temperature
@@ -66,30 +73,42 @@ print(complaint)
 
 **Key Class:** `DiagnosisDiscriminator`
 
-**Architecture:**
+**Dual-Mode Architecture with Automatic Fallback:**
+
+#### Mode 1: Machine Learning (Primary)
 - **Text Encoder:** DeBERTa-v3-base (184M params)
 - **Graph Module:** Symptom GNN with attention (100K params)
 - **Fusion Layer:** Multi-head fusion (50K params)
 - **Output Heads:** 10-way classifier + confidence
+- **Total Parameters:** ~3.8M
+- **Activation:** Automatically attempted by default
 
-**Total Parameters:** ~3.8M
+#### Mode 2: Lightweight Fallback (Automatic)
+- **Text Encoder:** Keyword-based feature extraction
+- **Parameters:** <10K
+- **Memory:** <50MB
+- **Quality:** Good accuracy on clear symptoms
+- **Activation:** Automatic fallback when ML unavailable
 
 **Features:**
 - Multi-task learning (diagnosis + confidence)
-- Graph-structured symptom reasoning
-- Attention over symptom relationships
-- Gradient-based training
+- Graph-structured symptom reasoning (ML mode)
+- Attention over symptom relationships (ML mode)
+- Gradient-based training (ML mode)
+- Keyword matching (fallback mode)
 
 **Usage:**
 ```python
 from phaita.models.discriminator import DiagnosisDiscriminator
 
-# Initialize
-discriminator = DiagnosisDiscriminator(
-    num_conditions=10,
-    use_pretrained=True,
-    device="auto"
-)
+# Initialize (ML-first with automatic fallback)
+discriminator = DiagnosisDiscriminator()  # Attempts DeBERTa+GNN, falls back to lightweight if needed
+
+# The system will:
+# 1. Try to load DeBERTa and GNN models with retries
+# 2. Print warning if ML unavailable
+# 3. Automatically fall back to lightweight mode
+# 4. Continue working seamlessly
 
 # Diagnose complaint
 complaint = "I can't breathe and my chest is tight"
@@ -499,16 +518,45 @@ pytest tests/test_model_loader.py
 ## Best Practices
 
 ### DO:
-- ✅ Use `use_pretrained=True` with graceful fallback
-- ✅ Enable enhanced Bayesian features for better realism
-- ✅ Profile memory before deploying full models
-- ✅ Use discriminator lite for CPU-only deployments
+- ✅ **Use defaults** - Models are now ML-first by default with automatic fallback
+- ✅ **Trust the fallback** - System gracefully degrades when ML unavailable
+- ✅ **Enable enhanced Bayesian features** for better realism
+- ✅ **Profile memory** before deploying full models in production
+- ✅ **Read warnings** - System informs you when falling back and why
 
 ### DON'T:
-- ❌ Load full models without checking VRAM
-- ❌ Ignore device compatibility warnings
-- ❌ Skip normalization in Bayesian network
-- ❌ Train without diversity loss (causes mode collapse)
+- ❌ **Force template mode** - Let the system try ML first (default behavior)
+- ❌ **Ignore warnings** - They explain what's happening and how to enable ML
+- ❌ **Skip normalization** in Bayesian network
+- ❌ **Train without diversity loss** (causes mode collapse)
+- ❌ **Assume mode** - Check `template_mode` / `use_pretrained` attributes to verify which mode is active
+
+### ML-First Migration Guide
+
+**Old approach (deprecated):**
+```python
+# Explicitly forcing fallback mode
+gen = ComplaintGenerator(use_pretrained=False)  # ❌ Don't do this
+disc = DiagnosisDiscriminator(use_pretrained=False)  # ❌ Don't do this
+```
+
+**New approach (recommended):**
+```python
+# Let system try ML first, fall back automatically
+gen = ComplaintGenerator()  # ✅ ML-first with automatic fallback
+disc = DiagnosisDiscriminator()  # ✅ ML-first with automatic fallback
+
+# Check which mode is active
+if gen.template_mode:
+    print("Generator using template mode (fallback)")
+else:
+    print("Generator using ML mode (Mistral-7B)")
+
+if not disc.use_pretrained:
+    print("Discriminator using lightweight mode (fallback)")
+else:
+    print("Discriminator using ML mode (DeBERTa+GNN)")
+```
 
 ---
 

@@ -1,7 +1,7 @@
 # PHAITA Copilot Instructions
 
 ## Overview
-PHAITA (Pre-Hospital AI Triage Algorithm) - medical triage research prototype using adversarial training (generator vs. discriminator). ~850KB, 28 Python files, Python 3.10+. Uses PyTorch, transformers (DeBERTa, Mistral 7B), GNNs, Bayesian networks. **Dual-mode:** full deep-learning OR lightweight template fallback. Research only - NOT clinical use.
+PHAITA (Pre-Hospital AI Triage Algorithm) - medical triage research prototype using adversarial training (generator vs. discriminator). ~850KB, 28 Python files, Python 3.10+. Uses PyTorch, transformers (DeBERTa, Mistral 7B), GNNs, Bayesian networks. **ML-first architecture:** Attempts machine learning by default, automatically falls back to lightweight templates if ML unavailable. Research only - NOT clinical use.
 
 ## Build & Test Commands
 
@@ -47,12 +47,12 @@ python tests/test_integration.py                # SLOW ~2min - requires network,
 **Demos:**
 ```bash
 python demos/simple_demo.py                         # No dependencies, instant
-python cli.py demo --num-examples 5                 # Uses template fallback
+python cli.py demo --num-examples 5                 # ML-first, falls back if needed
 python cli.py generate --count 10 --output out.json
 python cli.py diagnose --complaint "can't breathe"
 ```
 
-**Network behavior:** Without access to huggingface.co, system retries ~30-60s per model, then uses template mode (NORMAL, HANDLED). Warnings are expected offline.
+**Network behavior:** Without access to huggingface.co, system retries ~30-60s per model, prints warnings, then automatically falls back to template mode (NORMAL, EXPECTED). System continues working seamlessly.
 
 ## Project Structure
 
@@ -135,11 +135,20 @@ python tests/test_template_diversity.py         # If template system changed
 
 ## Critical Information
 
-**Dual-mode operation:**
-- Template mode: Fast, CPU, offline, 8 templates, deterministic (DEFAULT)
-- Full stack: GPU (4GB+ VRAM), downloads ~7GB models, `use_pretrained=True`
+**ML-first operation with automatic fallback:**
+- **Primary mode:** ML (DeBERTa+GNN, Mistral-7B) - Attempted first by default
+- **Fallback mode:** Templates/lightweight - Automatic when ML unavailable
+- **Behavior:** System tries ML, warns if unavailable, falls back seamlessly
+- **No configuration needed:** Just use default parameters (ML-first)
 
-**Automatic fallback:** Missing torch_geometric → MLP encoder; missing models → templates; missing transformers → simple text. **DON'T fix "failed to download" errors - expected offline.**
+**Automatic fallback triggers:**
+- Missing torch_geometric → MLP encoder
+- Missing/unavailable models → Templates/keyword matching
+- Missing transformers → Simple text processing
+- Offline/no internet → Template mode after retries
+- Insufficient memory → Lightweight mode
+
+**Expected behavior offline:** Model download retries (~30-60s), prints warnings explaining the issue, automatically falls back to templates. **DON'T fix "failed to download" errors - this is NORMAL and HANDLED.**
 
 **Test expectations:** test_basic.py (4/4), test_enhanced_bayesian.py (6/6), test_forum_scraping.py (3/3), test_dialogue_engine.py (all pass), test_diagnosis_orchestrator.py (11/11), test_conversation_flow.py (5/5), test_escalation_guidance.py (6/6). See docs/TESTING.md for all 26 test files.
 
@@ -147,7 +156,7 @@ python tests/test_template_diversity.py         # If template system changed
 
 **NO pytest/unittest** - plain Python scripts only.
 
-**CPU/GPU:** Everything works CPU-only with templates. GPU optional for full stack. Auto-detects device.
+**CPU/GPU:** Everything works CPU-only with automatic fallback. GPU optional for best quality. Auto-detects device.
 
 ## Documentation
 - `docs/DOCUMENTATION_INDEX.md` - Complete navigation guide to all documentation
@@ -155,33 +164,35 @@ python tests/test_template_diversity.py         # If template system changed
 - `docs/TESTING.md` - Comprehensive testing guide (all 26 test files)
 - `docs/TESTING_MULTI_TURN_DIALOGUES.md` - Dialogue integration tests
 - `docs/modules/DATA_MODULE.md` - Data layer documentation
-- `docs/modules/MODELS_MODULE.md` - Neural networks documentation
+- `docs/modules/MODELS_MODULE.md` - Neural networks documentation (updated with ML-first info)
 - `docs/modules/CONVERSATION_MODULE.md` - Dialogue engine documentation
 - `docs/modules/TRIAGE_MODULE.md` - Diagnosis and red-flags documentation
 - `docs/modules/IMPLEMENTATION_SUMMARY.md` - High-level architecture
 - `docs/modules/IMPLEMENTATION_DETAILS.md` - Deep-learning details
 - `docs/updates/UPDATE_LOG.md` - Consolidated update history
-- `README.md` - Quick start, CLI, API
+- `README.md` - Quick start, CLI, API (updated with ML-first info)
 - `PROJECT_SUMMARY.md` - Problem, solution, vision
 - `DEEP_LEARNING_GUIDE.md` - GPU setup, troubleshooting
 - `CHANGE_HISTORY.md` - Fixes, outstanding work
 
-**Key facts:** 10 respiratory ICD-10 conditions, adversarial training, Akinator-style vision (WIP), recent fixes (generator ref bug, discriminator PyTorch compat, grammar, forum realism).
+**Key facts:** 10 respiratory ICD-10 conditions, adversarial training, Akinator-style vision (WIP), ML-first architecture with automatic fallback.
 
 ## Quick Reference
 
 **Always:**
 - ✅ `pip install -r requirements.txt` first
 - ✅ `python tests/test_basic.py` to verify (~10s)
-- ✅ Use template mode for dev/test
-- ✅ Expect HuggingFace retries offline (normal)
-- ✅ Read docstrings for dual-mode behavior
+- ✅ Use default parameters (ML-first with automatic fallback)
+- ✅ Expect HuggingFace retries offline (normal, handled automatically)
+- ✅ Read warnings - they explain what's happening and why
+- ✅ Trust the fallback - system works seamlessly in both modes
 
 **Never:**
 - ❌ Add pytest/unittest
-- ❌ Fix "can't connect to huggingface.co"
+- ❌ Fix "can't connect to huggingface.co" (normal offline behavior, handled automatically)
 - ❌ Assume GPU
 - ❌ Modify medical priors without review
 - ❌ Add heavy dependencies
+- ❌ Force template mode with use_pretrained=False (let system try ML first)
 
-**Trust these instructions.** System designed for offline work with graceful degradation.
+**Trust these instructions.** System designed for ML-first operation with seamless offline fallback.
