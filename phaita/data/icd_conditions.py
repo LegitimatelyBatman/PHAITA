@@ -1,4 +1,10 @@
-"""Respiratory condition catalogue that loads from physician-editable config."""
+"""Respiratory condition catalogue that loads from physician-editable config.
+
+Configuration Loading:
+- New: config/medical_knowledge.yaml (consolidated medical knowledge)
+- Legacy: config/respiratory_conditions.yaml (backward compatibility)
+- Environment: PHAITA_RESPIRATORY_CONFIG (override path)
+"""
 
 from __future__ import annotations
 
@@ -18,6 +24,7 @@ class RespiratoryConditions:
 
     _CONFIG_ENV_VAR = "PHAITA_RESPIRATORY_CONFIG"
     _DEFAULT_CONFIG_FILENAME = "respiratory_conditions.yaml"
+    _MEDICAL_KNOWLEDGE_FILENAME = "medical_knowledge.yaml"
 
     _lock = threading.RLock()
     _CONDITIONS: Dict[str, Dict] = {}
@@ -115,6 +122,15 @@ class RespiratoryConditions:
     @classmethod
     def _load_conditions(cls, *, config_path: Optional[Path] = None) -> None:
         path = cls._resolve_config_path(config_path)
+        
+        # Check if using new medical_knowledge.yaml structure
+        project_root = Path(__file__).resolve().parents[2]
+        medical_knowledge_path = project_root / "config" / cls._MEDICAL_KNOWLEDGE_FILENAME
+        
+        # If no explicit path provided and medical_knowledge.yaml exists, use it
+        if config_path is None and medical_knowledge_path.exists():
+            path = medical_knowledge_path
+        
         if not path.exists():
             raise FileNotFoundError(
                 f"Respiratory condition config not found at '{path}'."
@@ -124,6 +140,11 @@ class RespiratoryConditions:
 
         with path.open("r", encoding="utf-8") as handle:
             raw_data = yaml.safe_load(handle) or {}
+        
+        # Handle new consolidated structure
+        if 'conditions' in raw_data:
+            # New medical_knowledge.yaml structure
+            raw_data = raw_data['conditions']
 
         validated = cls._validate(raw_data)
         cls._CONDITIONS = validated

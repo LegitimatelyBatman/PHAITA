@@ -1,0 +1,287 @@
+# Patient Complaint Templates
+# Each template includes metadata for intelligent selection based on patient demographics and symptom severity
+
+templates:
+  # Temporal variations - focus on timeline and progression
+  - id: temporal_started
+    pattern: "Started {duration} ago and I'm dealing with {symptoms}."
+    placeholders: [duration, symptoms]
+    formality_level: casual
+    age_appropriateness: [18, 75]
+    severity_match: [mild, moderate, severe]
+    weight: 1.0
+  
+  - id: temporal_getting_worse
+    pattern: "Getting worse over {duration}. Now I have {symptoms}."
+    placeholders: [duration, symptoms]
+    formality_level: casual
+    age_appropriateness: [18, 75]
+    severity_match: [moderate, severe]
+    weight: 1.0
+  
+  - id: temporal_came_on
+    pattern: "This came on {duration} ago with {symptoms}."
+    placeholders: [duration, symptoms]
+    formality_level: neutral
+    age_appropriateness: [25, 75]
+    severity_match: [mild, moderate, severe]
+    weight: 1.0
+  
+  - id: temporal_sudden
+    pattern: "It happened suddenly {duration} ago - {symptoms}."
+    placeholders: [duration, symptoms]
+    formality_level: casual
+    age_appropriateness: [18, 65]
+    severity_match: [moderate, severe]
+    weight: 1.0
+  
+  # Severity variations - emphasize intensity
+  - id: severity_mild
+    pattern: "I have mild {symptom}, nothing too bad yet."
+    placeholders: [symptom]
+    formality_level: casual
+    age_appropriateness: [18, 75]
+    severity_match: [mild]
+    weight: 1.5
+  
+  - id: severity_severe
+    pattern: "I have severe {symptom} and it's really concerning me."
+    placeholders: [symptom]
+    formality_level: neutral
+    age_appropriateness: [18, 75]
+    severity_match: [severe]
+    weight: 1.5
+  
+  - id: severity_unbearable
+    pattern: "The {symptom} is unbearable. I can't take it anymore."
+    placeholders: [symptom]
+    formality_level: casual
+    age_appropriateness: [18, 65]
+    severity_match: [severe]
+    weight: 1.5
+  
+  - id: severity_moderate
+    pattern: "I'm experiencing moderate {symptom} that's getting harder to ignore."
+    placeholders: [symptom]
+    formality_level: neutral
+    age_appropriateness: [25, 75]
+    severity_match: [moderate]
+    weight: 1.5
+  
+  # Context variations - situational triggers
+  - id: context_after_trigger
+    pattern: "After {trigger}, I've been having {symptoms}."
+    placeholders: [trigger, symptoms]
+    formality_level: neutral
+    age_appropriateness: [18, 75]
+    severity_match: [mild, moderate, severe]
+    weight: 1.0
+  
+  - id: context_during_activity
+    pattern: "During {activity}, I notice {symptoms}."
+    placeholders: [activity, symptoms]
+    formality_level: neutral
+    age_appropriateness: [18, 75]
+    severity_match: [mild, moderate]
+    weight: 1.0
+  
+  - id: context_at_night
+    pattern: "At night, I'm dealing with {symptoms}."
+    placeholders: [symptoms]
+    formality_level: casual
+    age_appropriateness: [18, 75]
+    severity_match: [mild, moderate, severe]
+    weight: 1.0
+  
+  - id: context_when_lying
+    pattern: "When lying down, I get {symptoms}."
+    placeholders: [symptoms]
+    formality_level: casual
+    age_appropriateness: [18, 75]
+    severity_match: [moderate, severe]
+    weight: 1.0
+  
+  # Emotional variations - patient's psychological state
+  - id: emotional_terrified
+    pattern: "I'm terrified about {symptom}. What's happening to me?"
+    placeholders: [symptom]
+    formality_level: casual
+    age_appropriateness: [18, 55]
+    severity_match: [severe]
+    weight: 1.2
+  
+  - id: emotional_confused
+    pattern: "I'm confused by {symptom}. It doesn't make sense."
+    placeholders: [symptom]
+    formality_level: casual
+    age_appropriateness: [18, 65]
+    severity_match: [mild, moderate]
+    weight: 1.2
+  
+  - id: emotional_frustrated
+    pattern: "I'm frustrated with {symptoms} - they won't go away."
+    placeholders: [symptoms]
+    formality_level: casual
+    age_appropriateness: [18, 65]
+    severity_match: [moderate, severe]
+    weight: 1.2
+  
+  - id: emotional_worried
+    pattern: "I'm really worried about {symptoms}. Should I be concerned?"
+    placeholders: [symptoms]
+    formality_level: casual
+    age_appropriateness: [18, 75]
+    severity_match: [mild, moderate, severe]
+    weight: 1.2
+  
+  - id: emotional_exhausted
+    pattern: "I'm exhausted from dealing with {symptoms}."
+    placeholders: [symptoms]
+    formality_level: casual
+    age_appropriateness: [25, 75]
+    severity_match: [moderate, severe]
+    weight: 1.2
+  
+  # Compound sentence structures - more complex descriptions
+  - id: compound_action_trigger
+    pattern: "I have {symptom1}, and when I {action}, I also get {symptom2}."
+    placeholders: [symptom1, action, symptom2]
+    formality_level: neutral
+    age_appropriateness: [18, 75]
+    severity_match: [moderate, severe]
+    weight: 0.8
+  
+  - id: compound_progression
+    pattern: "My {symptom1} started {duration} ago, but now I'm also experiencing {symptom2}."
+    placeholders: [symptom1, duration, symptom2]
+    formality_level: neutral
+    age_appropriateness: [25, 75]
+    severity_match: [moderate, severe]
+    weight: 0.8
+  
+  - id: compound_multiple_symptoms
+    pattern: "I'm dealing with {symptom1} and {symptom2}, plus I feel {emotion}."
+    placeholders: [symptom1, symptom2, emotion]
+    formality_level: casual
+    age_appropriateness: [18, 65]
+    severity_match: [moderate, severe]
+    weight: 0.8
+  
+  - id: compound_with_history
+    pattern: "I've had {symptom1} for {duration}, and recently {symptom2} started."
+    placeholders: [symptom1, duration, symptom2]
+    formality_level: neutral
+    age_appropriateness: [25, 75]
+    severity_match: [moderate, severe]
+    weight: 0.8
+  
+  # Additional varied patterns
+  - id: basic_present_continuous
+    pattern: "I've been experiencing {symptoms} and it's worrying me."
+    placeholders: [symptoms]
+    formality_level: neutral
+    age_appropriateness: [18, 75]
+    severity_match: [mild, moderate, severe]
+    weight: 1.0
+  
+  - id: formal_presentation
+    pattern: "{demographics} presenting with {symptoms}."
+    placeholders: [demographics, symptoms]
+    formality_level: formal
+    age_appropriateness: [35, 75]
+    severity_match: [mild, moderate, severe]
+    weight: 0.7
+  
+  - id: urgent_help_seeking
+    pattern: "Help! I can't handle {symptoms} anymore!"
+    placeholders: [symptoms]
+    formality_level: casual
+    age_appropriateness: [18, 55]
+    severity_match: [severe]
+    weight: 1.3
+  
+  - id: descriptive_struggle
+    pattern: "I've been struggling with {symptoms} for {duration}."
+    placeholders: [symptoms, duration]
+    formality_level: neutral
+    age_appropriateness: [18, 75]
+    severity_match: [moderate, severe]
+    weight: 1.0
+  
+  - id: question_format
+    pattern: "What should I do about {symptoms}? It's been {duration}."
+    placeholders: [symptoms, duration]
+    formality_level: casual
+    age_appropriateness: [18, 65]
+    severity_match: [mild, moderate]
+    weight: 1.0
+  
+  - id: comparison_worsening
+    pattern: "My {symptom} keeps getting worse, especially {trigger}."
+    placeholders: [symptom, trigger]
+    formality_level: casual
+    age_appropriateness: [18, 75]
+    severity_match: [moderate, severe]
+    weight: 1.0
+  
+  - id: detailed_concern
+    pattern: "Doctor, I'm concerned about {symptoms}. Started {duration} ago."
+    placeholders: [symptoms, duration]
+    formality_level: formal
+    age_appropriateness: [25, 75]
+    severity_match: [mild, moderate, severe]
+    weight: 0.9
+
+# Placeholder value pools
+placeholders:
+  duration:
+    - "a few hours"
+    - "yesterday"
+    - "two days"
+    - "this morning"
+    - "last night"
+    - "a week"
+    - "three days"
+    - "earlier today"
+    - "last week"
+    - "a couple days"
+  
+  severity:
+    - "mild"
+    - "moderate"
+    - "severe"
+    - "terrible"
+    - "awful"
+    - "bad"
+    - "worse"
+    - "intense"
+  
+  emotion:
+    - "worried"
+    - "scared"
+    - "exhausted"
+    - "panicked"
+    - "terrible"
+    - "awful"
+    - "anxious"
+    - "concerned"
+    - "frightened"
+  
+  action:
+    - "breathe deeply"
+    - "walk"
+    - "lie down"
+    - "exert myself"
+    - "move around"
+    - "cough"
+    - "bend over"
+    - "climb stairs"
+  
+  activity:
+    - "exercise"
+    - "work"
+    - "sleeping"
+    - "eating"
+    - "walking"
+    - "resting"
+    - "physical activity"
