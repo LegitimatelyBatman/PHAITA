@@ -69,19 +69,34 @@ class SymptomGraphBuilder:
         elif causality_config_path:
             self._load_causality_config(causality_config_path)
         else:
-            # Try to load from default location
-            default_path = Path(__file__).resolve().parents[2] / "config" / "symptom_causality.yaml"
-            if default_path.exists():
-                self._load_causality_config(str(default_path))
+            # Try to load from default location - check new structure first
+            project_root = Path(__file__).resolve().parents[2]
+            medical_knowledge_path = project_root / "config" / "medical_knowledge.yaml"
+            legacy_path = project_root / "config" / "symptom_causality.yaml"
+            
+            if medical_knowledge_path.exists():
+                self._load_causality_config(str(medical_knowledge_path))
+            elif legacy_path.exists():
+                self._load_causality_config(str(legacy_path))
     
     def _load_causality_config(self, config_path: str):
-        """Load causality configuration from YAML file."""
+        """Load causality configuration from YAML file.
+        
+        Supports both medical_knowledge.yaml and legacy symptom_causality.yaml.
+        """
         try:
             with open(config_path, 'r') as f:
-                self.causality_config = yaml.safe_load(f)
+                config_data = yaml.safe_load(f)
+                
+            # Handle new medical_knowledge.yaml structure
+            if 'symptom_causality' in config_data:
+                config_data = config_data['symptom_causality']
+            
+            self.causality_config = config_data
         except Exception as e:
             import warnings
             warnings.warn(f"Failed to load causality config from {config_path}: {e}", RuntimeWarning)
+            self.causality_config = None
         
     def _build_symptom_vocabulary(self):
         """Build a vocabulary of all unique symptoms."""

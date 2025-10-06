@@ -17,8 +17,18 @@ class TemplateManager:
             template_file: Path to YAML template file. If None, uses default location.
         """
         if template_file is None:
-            # Default to templates.yaml in the same directory as this file
-            template_file = Path(__file__).parent / "templates.yaml"
+            # Try new config/templates.yaml location first
+            project_root = Path(__file__).resolve().parents[2]
+            config_template = project_root / "config" / "templates.yaml"
+            legacy_template = Path(__file__).parent / "templates.yaml"
+            
+            if config_template.exists():
+                template_file = config_template
+            elif legacy_template.exists():
+                template_file = legacy_template
+            else:
+                # Default to config location (new structure)
+                template_file = config_template
         
         self.template_file = template_file
         self.templates: List[Dict] = []
@@ -42,7 +52,7 @@ class TemplateManager:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"Template file not found: {self.template_file}. "
-                "Expected templates.yaml in phaita/data/ directory."
+                "Expected templates.yaml in config/ or phaita/data/ directory."
             )
         except yaml.YAMLError as e:
             raise ValueError(f"Invalid YAML in template file: {e}")

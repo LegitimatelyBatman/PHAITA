@@ -127,87 +127,119 @@ python -c "from phaita.utils.model_loader import load_model_and_tokenizer; \
 
 ## 3. Configuration
 
-### Main Configuration File: `config.yaml`
+### System Configuration: `config/system.yaml` ⭐ **UPDATED**
+
+Technical settings for model architecture, training, and system behavior:
 
 ```yaml
-# Model Configuration
-models:
-  generator:
-    model_name: "mistralai/Mistral-7B-Instruct-v0.2"
-    use_pretrained: true  # Set to false for CPU-only
-    quantization: "4bit"  # Options: "4bit", "8bit", null
-    temperature: 0.7
-    max_length: 256
-  
-  discriminator:
-    model_name: "microsoft/deberta-v3-base"
-    use_pretrained: true
-    hidden_dim: 768
-    num_heads: 8
-    dropout: 0.1
-  
-  bayesian:
-    use_enhanced: true
-    enable_age_modulation: true
-    enable_severity_modulation: true
-    enable_comorbidity_effects: true
+# Model Architecture
+model:
+  deberta_model: "microsoft/deberta-base"
+  mistral_model: "mistralai/Mistral-7B-Instruct-v0.2"
+  gnn_hidden_dim: 128
+  gnn_num_layers: 3
+  use_quantization: true
 
 # Training Configuration
 training:
+  num_epochs: 100
   batch_size: 16
-  learning_rate: 1e-4
-  num_epochs: 50
-  gradient_clip: 1.0
-  save_interval: 5
+  generator_lr: 2.0e-5
+  discriminator_lr: 1.0e-4
+  diversity_weight: 0.1
+  eval_interval: 10
+  save_interval: 50
+  device: null  # auto-detect
 
-# Conversation Configuration
+# Data Processing
+data:
+  num_respiratory_conditions: 10
+  min_symptoms_per_condition: 3
+  max_symptoms_per_condition: 7
+  num_complaint_variants: 3
+
+# Conversation Settings
 conversation:
   max_questions: 10
   confidence_threshold: 0.85
   min_info_gain: 0.1
   enable_red_flag_escalation: true
 
-# Data Configuration
-data:
-  num_conditions: 10
-  synthetic_samples: 1000
-  forum_samples: 500
+# Triage Settings
+triage:
+  max_diagnoses: 10
+  min_confidence: 0.05
+  enable_red_flag_check: true
+  enable_info_sheets: true
+  escalation_thresholds:
+    critical: 0.95
+    urgent: 0.80
+    routine: 0.50
 ```
 
-### Medical Knowledge Configuration
+### Medical Knowledge Configuration ⭐ **NEW CONSOLIDATED FILE**
 
-Located in `config/` directory:
+**Primary**: `config/medical_knowledge.yaml` - All physician-editable medical knowledge in ONE file:
 
-#### `config/respiratory_conditions.yaml`
 ```yaml
+# RESPIRATORY CONDITIONS
 conditions:
   J45.9:
-    name: "Asthma, unspecified"
+    name: "Asthma"
     symptoms:
-      shortness_of_breath: 0.9
-      wheezing: 0.8
-      chest_tightness: 0.7
-      cough: 0.6
-```
+      - wheezing
+      - shortness_of_breath
+      - chest_tightness
+    severity_indicators:
+      - unable_to_speak
+      - cyanosis
+    lay_terms:
+      - "can't breathe"
+      - tight chest
 
-#### `config/red_flags.yaml`
-```yaml
+# RED-FLAG SYMPTOMS
 red_flags:
-  severe_respiratory_distress:
-    severity: critical
-    action: "Call 911 immediately"
-    guidance: "Life-threatening breathing difficulty"
+  J45.9:
+    red_flags:
+      - severe_respiratory_distress
+      - unable_to_speak_full_sentences
+    symptoms:
+      - inability to speak more than a few words
+    escalation: Use a rescue inhaler immediately...
+
+# COMORBIDITY EFFECTS
+comorbidity_effects:
+  diabetes:
+    symptom_modifiers:
+      fatigue: 1.3
+      infection_risk: 1.5
+    specific_symptoms:
+      - frequent_urination
+    probability: 0.3
+
+# SYMPTOM CAUSALITY
+symptom_causality:
+  causal_edges:
+    - source: airway_inflammation
+      target: wheezing
+      strength: 0.9
+
+# TEMPORAL PATTERNS
+temporal_patterns:
+  J45.9:
+    typical_progression:
+      - symptom: wheezing
+        onset_hour: 0
 ```
 
-#### `config/comorbidity_effects.yaml`
-```yaml
-comorbidities:
-  diabetes:
-    affects:
-      J18.9:  # Pneumonia
-        symptom_multiplier: 1.3
-        severity_increase: true
-```
+**Alternative**: Individual legacy files still supported:
+- `config/respiratory_conditions.yaml`
+- `config/red_flags.yaml`
+- `config/comorbidity_effects.yaml`
+- `config/symptom_causality.yaml`
+- `config/temporal_patterns.yaml`
+
+**Migration**: See [docs/CONFIGURATION_MIGRATION.md](../CONFIGURATION_MIGRATION.md)
 
 ---
 
@@ -817,23 +849,24 @@ az webapp up \
 - [ ] Performance benchmarking
 - [ ] Clinical review of red-flags
 
-### 10.2 Updating Medical Knowledge
+### 10.2 Updating Medical Knowledge ⭐ **UPDATED**
 
 ```bash
-# Edit condition definitions
-nano config/respiratory_conditions.yaml
+# Edit medical knowledge (NEW: consolidated file)
+nano config/medical_knowledge.yaml
 
-# Edit red-flags
-nano config/red_flags.yaml
+# OR edit individual legacy files (still supported):
+# nano config/respiratory_conditions.yaml
+# nano config/red_flags.yaml
+# nano config/comorbidity_effects.yaml
+# nano config/symptom_causality.yaml
+# nano config/temporal_patterns.yaml
 
-# Edit comorbidity effects
-nano config/comorbidity_effects.yaml
+# Hot-reload without restart (if using Python API)
+python -c "from phaita.data import RespiratoryConditions; RespiratoryConditions.reload()"
 
-# Validate changes
-python -c "from phaita.utils.config import Config; Config().validate()"
-
-# Retrain models
-python cli.py train --config config.yaml
+# Retrain models if needed
+python cli.py train --config config/system.yaml
 ```
 
 ### 10.3 Model Retraining
@@ -922,13 +955,14 @@ python main.py interactive
 python patient_cli.py --port 8080
 ```
 
-### Key Files
-- `main.py` - **NEW: Centralized entry point for common tasks** ⭐
+### Key Files ⭐ **UPDATED**
+- `main.py` - Centralized entry point for common tasks
 - `cli.py` - Command-line interface (advanced features)
 - `patient_cli.py` - Web interface
-- `config.yaml` - Main configuration
-- `config/respiratory_conditions.yaml` - Medical knowledge
-- `config/red_flags.yaml` - Emergency criteria
+- `config/system.yaml` - System configuration (NEW!)
+- `config/medical_knowledge.yaml` - Medical knowledge (NEW!)
+- `config/templates.yaml` - Complaint templates
+- `config.yaml` - Legacy configuration (backward compatibility)
 - `requirements.txt` - Dependencies
 
 ### Support

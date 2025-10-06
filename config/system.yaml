@@ -1,0 +1,68 @@
+# PHAITA System Configuration
+# Global technical settings for model architecture, training, and data processing
+# DO NOT edit unless you are modifying system behavior or performance tuning
+
+# Model Architecture Configuration
+model:
+  # Pre-trained model identifiers
+  deberta_model: "microsoft/deberta-base"
+  mistral_model: "mistralai/Mistral-7B-Instruct-v0.2"
+  
+  # Graph Neural Network settings
+  gnn_hidden_dim: 128
+  gnn_num_layers: 3
+  
+  # Model optimization
+  use_quantization: true
+
+# Training Configuration
+training:
+  # Training loop parameters
+  num_epochs: 100
+  batch_size: 16
+  
+  # Learning rates
+  generator_lr: 2.0e-5
+  discriminator_lr: 1.0e-4
+  
+  # Loss function weights
+  diversity_weight: 0.1
+  
+  # Checkpointing and evaluation
+  eval_interval: 10
+  save_interval: 50
+  
+  # Hardware settings (null = auto-detect)
+  device: null
+
+# Data Processing Configuration
+data:
+  # Respiratory conditions database
+  num_respiratory_conditions: 10
+  min_symptoms_per_condition: 3
+  max_symptoms_per_condition: 7
+  
+  # Complaint generation
+  num_complaint_variants: 3
+
+# Conversation Configuration
+conversation:
+  # Dialogue engine settings
+  max_questions: 10
+  confidence_threshold: 0.85
+  min_info_gain: 0.1
+  enable_red_flag_escalation: true
+
+# Triage Configuration
+triage:
+  # Diagnosis settings
+  max_diagnoses: 10
+  min_confidence: 0.05
+  enable_red_flag_check: true
+  enable_info_sheets: true
+  
+  # Escalation thresholds
+  escalation_thresholds:
+    critical: 0.95
+    urgent: 0.80
+    routine: 0.50

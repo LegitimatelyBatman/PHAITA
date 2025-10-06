@@ -1,0 +1,1077 @@
+# PHAITA Medical Knowledge Configuration
+# ========================================
+#
+# This file contains all physician-editable medical knowledge.
+# Physicians can safely edit this file to update:
+#   - Respiratory conditions and their symptom probabilities
+#   - Red-flag symptoms requiring immediate medical attention
+#   - Comorbidity effects on symptom presentation
+#   - Causal relationships between symptoms
+#   - Temporal progression patterns
+#
+# IMPORTANT: Changes to this file take effect after system restart
+# or by calling RespiratoryConditions.reload()
+#
+
+conditions:
+  J45.9:
+    name: Asthma
+    symptoms:
+    - wheezing
+    - shortness_of_breath
+    - chest_tightness
+    - cough
+    - difficulty_breathing
+    severity_indicators:
+    - unable_to_speak
+    - cyanosis
+    - tachypnea
+    - use_of_accessory_muscles
+    - severe_distress
+    lay_terms:
+    - wheezy
+    - can't breathe
+    - tight chest
+    - can't catch my breath
+    - breathless
+    - gasping for air
+    description: Chronic inflammatory airway disease with episodic symptoms
+    demographics:
+      inclusion:
+        age_ranges:
+        - min: 12
+          max: 45
+          weight: 1.0
+        - min: 46
+          max: 65
+          weight: 0.6
+        sexes:
+        - female
+        - male
+        ethnicities:
+        - any
+        social_history:
+        - Lives in urban environment
+        risk_factors:
+        - Family history of asthma
+        - History of seasonal allergies
+        exposures:
+        - Second-hand smoke
+        - Dust at work
+      exclusion:
+        age_ranges:
+        - min: 0
+          max: 2
+        notes:
+        - Recent major chest trauma suggests alternative diagnosis
+    history:
+      inclusion:
+        past_conditions:
+        - Seasonal allergies
+        - Childhood wheezing episodes
+        medications:
+        - Rescue inhaler use as needed
+        allergies:
+        - Dust mites
+        last_meal:
+        - Ate soup 4 hours ago
+        recent_events:
+        - Symptoms began after cleaning a dusty attic
+        lifestyle:
+        - Exercises occasionally
+      exclusion:
+        medications:
+        - Daily beta blocker therapy
+        recent_events:
+        - Foreign body aspiration
+  J18.9:
+    name: Pneumonia
+    symptoms:
+    - cough
+    - fever
+    - chest_pain
+    - dyspnea
+    - productive_cough
+    - fatigue
+    severity_indicators:
+    - high_fever
+    - severe_chest_pain
+    - confusion
+    - rapid_breathing
+    - low_oxygen
+    lay_terms:
+    - coughing up stuff
+    - chest hurts
+    - can't breathe properly
+    - really tired
+    - burning chest
+    - lung infection
+    description: Infection causing inflammation of lung tissue
+    demographics:
+      inclusion:
+        age_ranges:
+        - min: 40
+          max: 80
+        sexes:
+        - female
+        - male
+        ethnicities:
+        - any
+        occupations:
+        - Retired teacher
+        - Factory worker
+        risk_factors:
+        - Smoker or former smoker
+        regions:
+        - Temperate climates
+      exclusion:
+        notes:
+        - Recent thoracic surgery without infection signs
+    history:
+      inclusion:
+        past_conditions:
+        - Chronic bronchitis
+        medications:
+        - Recent antibiotics course
+        last_meal:
+        - Light breakfast 6 hours ago
+        recent_events:
+        - Exposed to grandchild with cold
+        family_history:
+        - Respiratory illnesses in siblings
+      exclusion:
+        medications:
+        - Long-term corticosteroid prophylaxis
+        recent_events:
+        - Hospital discharge within 24 hours for another illness
+  J44.9:
+    name: COPD
+    symptoms:
+    - chronic_cough
+    - dyspnea
+    - wheezing
+    - sputum_production
+    - chest_tightness
+    severity_indicators:
+    - severe_breathlessness
+    - cyanosis
+    - weight_loss
+    - edema
+    - barrel_chest
+    lay_terms:
+    - can't breathe
+    - constant cough
+    - bringing up phlegm
+    - out of breath
+    - chest feels tight
+    description: Chronic obstructive pulmonary disease with airflow limitation
+    demographics:
+      inclusion:
+        age_ranges:
+        - min: 55
+          max: 85
+        sexes:
+        - female
+        - male
+        social_history:
+        - Long history of smoking
+        occupations:
+        - Retired miner
+        - Former factory worker
+        risk_factors:
+        - 30+ pack-year smoking history
+        notes:
+        - Uses portable oxygen occasionally
+      exclusion:
+        age_ranges:
+        - min: 0
+          max: 25
+        notes:
+        - Primary diagnosis of cystic fibrosis
+    history:
+      inclusion:
+        past_conditions:
+        - Chronic bronchitis
+        - Emphysema
+        medications:
+        - Long-acting bronchodilator
+        - Rescue inhaler
+        allergies:
+        - None known
+        last_meal:
+        - Ate oatmeal 3 hours ago
+        recent_events:
+        - Increased dyspnea after climbing stairs
+        lifestyle:
+        - Sedentary due to breathlessness
+      exclusion:
+        medications:
+        - Recently started ACE inhibitors
+        recent_events:
+        - Acute chest trauma
+  J06.9:
+    name: Upper respiratory infection
+    symptoms:
+    - sore_throat
+    - runny_nose
+    - cough
+    - sneezing
+    - nasal_congestion
+    - mild_fever
+    severity_indicators:
+    - high_fever
+    - severe_throat_pain
+    - difficulty_swallowing
+    - persistent_cough
+    lay_terms:
+    - stuffy nose
+    - scratchy throat
+    - head cold
+    - sniffles
+    - throat hurts
+    description: Common cold or upper respiratory tract infection
+    demographics:
+      inclusion:
+        age_ranges:
+        - min: 5
+          max: 60
+        sexes:
+        - female
+        - male
+        social_history:
+        - Works in open-plan office
+        exposures:
+        - Recent contact with sick coworkers
+      exclusion:
+        notes:
+        - Recent travel to tropical regions with unusual pathogens
+    history:
+      inclusion:
+        past_conditions:
+        - Occasional seasonal colds
+        medications:
+        - Over-the-counter decongestant
+        last_meal:
+        - Sandwich 2 hours ago
+        recent_events:
+        - Child at home has similar symptoms
+      exclusion:
+        medications:
+        - Current chemotherapy
+        recent_events:
+        - Recent hospitalization for pneumonia
+  J20.9:
+    name: Acute bronchitis
+    symptoms:
+    - cough
+    - sputum_production
+    - chest_discomfort
+    - mild_dyspnea
+    - wheezing
+    severity_indicators:
+    - persistent_cough
+    - blood_in_sputum
+    - fever
+    - severe_chest_pain
+    lay_terms:
+    - chest cold
+    - hacking cough
+    - coughing up mucus
+    - chest feels heavy
+    - can't stop coughing
+    description: Acute inflammation of bronchial tubes
+    demographics:
+      inclusion:
+        age_ranges:
+        - min: 18
+          max: 70
+        sexes:
+        - female
+        - male
+        occupations:
+        - School teacher
+        - Warehouse worker
+        exposures:
+        - Works around dust
+      exclusion:
+        notes:
+        - Recent diagnosis of pertussis
+    history:
+      inclusion:
+        past_conditions:
+        - Recent upper respiratory infection
+        medications:
+        - Occasional cough suppressant
+        allergies:
+        - Penicillin allergy
+        last_meal:
+        - Coffee and toast this morning
+        recent_events:
+        - Started after being caught in rain
+      exclusion:
+        medications:
+        - Chronic steroid therapy
+        recent_events:
+        - Hospitalization for COPD exacerbation in past week
+  J81.0:
+    name: Acute pulmonary edema
+    symptoms:
+    - severe_dyspnea
+    - orthopnea
+    - cough
+    - wheezing
+    - anxiety
+    - pink_frothy_sputum
+    severity_indicators:
+    - extreme_breathlessness
+    - cyanosis
+    - confusion
+    - diaphoresis
+    - tachycardia
+    lay_terms:
+    - can't breathe lying down
+    - drowning feeling
+    - gasping for air
+    - fluid in lungs
+    - suffocating
+    description: Fluid accumulation in lung tissue
+    demographics:
+      inclusion:
+        age_ranges:
+        - min: 60
+          max: 90
+        sexes:
+        - female
+        - male
+        risk_factors:
+        - History of heart failure
+        lifestyle:
+        - Limited exercise tolerance
+      exclusion:
+        notes:
+        - Recent high-altitude travel without cardiac history
+    history:
+      inclusion:
+        past_conditions:
+        - Congestive heart failure
+        medications:
+        - Loop diuretics
+        - ACE inhibitor
+        allergies:
+        - None reported
+        last_meal:
+        - Small dinner 5 hours ago
+        recent_events:
+        - Missed diuretic doses this week
+        family_history:
+        - Heart disease in parents
+      exclusion:
+        medications:
+        - Recent IV fluid bolus for trauma
+        recent_events:
+        - Chest trauma with suspected pneumothorax
+  J93.0:
+    name: Spontaneous tension pneumothorax
+    symptoms:
+    - sudden_chest_pain
+    - dyspnea
+    - tachycardia
+    - anxiety
+    - decreased_breath_sounds
+    severity_indicators:
+    - severe_chest_pain
+    - extreme_breathlessness
+    - hypotension
+    - cyanosis
+    - respiratory_distress
+    lay_terms:
+    - collapsed lung
+    - sharp chest pain
+    - sudden breathing trouble
+    - stabbing pain
+    - can't take deep breath
+    description: Air in pleural space causing lung collapse
+    demographics:
+      inclusion:
+        age_ranges:
+        - min: 18
+          max: 40
+        sexes:
+        - male
+        - female
+        risk_factors:
+        - Tall thin body habitus
+        lifestyle:
+        - Active lifestyle
+      exclusion:
+        notes:
+        - Recent invasive thoracic procedure
+    history:
+      inclusion:
+        past_conditions:
+        - None significant
+        medications:
+        - Occasional use of NSAIDs
+        allergies:
+        - None known
+        last_meal:
+        - Skipped breakfast due to sudden pain
+        recent_events:
+        - Developed symptoms while stretching after waking
+      exclusion:
+        recent_events:
+        - Penetrating chest trauma
+  J15.9:
+    name: Bacterial pneumonia
+    symptoms:
+    - productive_cough
+    - fever
+    - chest_pain
+    - dyspnea
+    - chills
+    - fatigue
+    severity_indicators:
+    - high_fever
+    - confusion
+    - severe_chest_pain
+    - rapid_breathing
+    - hypoxia
+    lay_terms:
+    - lung infection
+    - coughing up colored mucus
+    - chest really hurts
+    - can't breathe right
+    - really sick
+    description: Bacterial infection of lung parenchyma
+    demographics:
+      inclusion:
+        age_ranges:
+        - min: 45
+          max: 85
+        sexes:
+        - female
+        - male
+        social_history:
+        - Lives with grandchildren
+        risk_factors:
+        - Recent influenza infection
+        regions:
+        - Temperate climates
+      exclusion:
+        notes:
+        - Known aspiration event without infection
+    history:
+      inclusion:
+        past_conditions:
+        - Type 2 diabetes
+        medications:
+        - Oral hypoglycemics
+        allergies:
+        - Penicillin allergy
+        last_meal:
+        - Ate porridge 3 hours ago
+        recent_events:
+        - Worsening cough after cold snap
+        lifestyle:
+        - Limited outdoor activity
+      exclusion:
+        medications:
+        - Current macrolide therapy for another infection
+        recent_events:
+        - Hospital discharge within 48 hours
+  J12.9:
+    name: Viral pneumonia
+    symptoms:
+    - dry_cough
+    - fever
+    - dyspnea
+    - myalgia
+    - headache
+    - fatigue
+    severity_indicators:
+    - high_fever
+    - severe_dyspnea
+    - confusion
+    - rapid_breathing
+    lay_terms:
+    - dry cough
+    - viral lung infection
+    - aching all over
+    - can't breathe well
+    - wiped out
+    description: Viral infection of lung tissue
+    demographics:
+      inclusion:
+        age_ranges:
+        - min: 20
+          max: 70
+        sexes:
+        - female
+        - male
+        exposures:
+        - Works in healthcare setting
+        lifestyle:
+        - Active family life
+      exclusion:
+        notes:
+        - Recent travel to areas with emerging pathogens without symptoms
+    history:
+      inclusion:
+        past_conditions:
+        - Seasonal influenza last year
+        medications:
+        - Occasional antiviral use
+        last_meal:
+        - Smoothie 1 hour ago
+        recent_events:
+        - Caring for sick partner
+        immunizations:
+        - Up to date on influenza vaccine
+      exclusion:
+        medications:
+        - Chronic immunosuppressants
+        recent_events:
+        - Major surgery in past 2 weeks
+  J21.9:
+    name: Acute bronchiolitis
+    symptoms:
+    - wheezing
+    - cough
+    - dyspnea
+    - tachypnea
+    - retractions
+    - nasal_flaring
+    severity_indicators:
+    - apnea
+    - cyanosis
+    - poor_feeding
+    - dehydration
+    lay_terms:
+    - fast breathing
+    - chest sounds tight
+    - baby working hard to breathe
+    - flaring nostrils
+    description: Inflammation of the bronchioles often seen in infants
+    demographics:
+      inclusion:
+        age_ranges:
+        - min: 0
+          max: 2
+        sexes:
+        - female
+        - male
+        social_history:
+        - Attends daycare
+        exposures:
+        - Sibling with cold symptoms
+      exclusion:
+        notes:
+        - Known chronic lung disease
+    history:
+      inclusion:
+        past_conditions:
+        - Prematurity at 35 weeks
+        medications:
+        - Vitamin D supplement
+        allergies:
+        - None reported
+        last_meal:
+        - Bottle 1 hour ago
+        recent_events:
+        - Cough started after family gathering
+        supports:
+        - Parents using humidifier at night
+      exclusion:
+        medications:
+        - Chronic steroid therapy
+        recent_events:
+        - Prior hospital admission this week for respiratory distress
+red_flags:
+  J45.9:
+    red_flags:
+    - severe_respiratory_distress
+    - unable_to_speak_full_sentences
+    - cyanosis
+    - altered_mental_status
+    - peak_flow_below_50_percent
+    symptoms:
+    - inability to speak more than a few words
+    - bluish lips or fingernails
+    - peak flow < 50% of personal best
+    escalation: Use a rescue inhaler immediately and seek emergency care if symptoms
+      do not improve within minutes.
+  J18.9:
+    red_flags:
+    - confusion
+    - altered_mental_status
+    - rapid_breathing_over_30
+    - oxygen_saturation_below_92
+    - severe_chest_pain
+    symptoms:
+    - confusion or altered mental status
+    - rapid breathing > 30 breaths per minute
+    - oxygen saturation below 92%
+    escalation: Urgent evaluation in an emergency department is recommended, especially
+      for older adults or those with chronic illness.
+  J44.9:
+    red_flags:
+    - severe_breathlessness_at_rest
+    - worsening_leg_swelling
+    - new_confusion
+    - drowsiness
+    - respiratory_failure
+    symptoms:
+    - severe breathlessness at rest
+    - worsening swelling in legs or abdomen
+    - drowsiness or new confusion
+    escalation: Initiate rescue medications and contact emergency services if breathing
+      support is not available at home.
+  J06.9:
+    red_flags:
+    - stridor
+    - noisy_breathing_at_rest
+    - inability_to_swallow
+    - dehydration
+    - high_fever_with_breathing_difficulty
+    symptoms:
+    - stridor or noisy breathing at rest
+    - inability to swallow fluids
+    - signs of dehydration in infants or older adults
+    escalation: Seek urgent care if breathing becomes noisy, swallowing is impaired,
+      or hydration cannot be maintained.
+  J20.9:
+    red_flags:
+    - high_fever_over_3_days
+    - bloody_sputum
+    - shortness_of_breath_at_rest
+    - severe_chest_pain
+    - wheezing_unresponsive_to_treatment
+    symptoms:
+    - high fever lasting more than 3 days
+    - bloody sputum
+    - shortness of breath at rest
+    escalation: Schedule prompt medical review; escalate to emergency services for
+      breathing difficulty or blood in sputum.
+  J81.0:
+    red_flags:
+    - sudden_severe_breathlessness
+    - frothy_pink_sputum
+    - chest_pain_with_sweating
+    - rapid_heart_rate
+    - severe_anxiety
+    symptoms:
+    - sudden severe breathlessness
+    - frothy pink sputum
+    - chest pain with sweating
+    escalation: "Call emergency services immediately\u2014acute pulmonary edema is\
+      \ a medical emergency."
+  J93.0:
+    red_flags:
+    - sudden_stabbing_chest_pain
+    - rapid_collapse
+    - fainting
+    - asymmetrical_chest_movement
+    - severe_breathing_difficulty
+    symptoms:
+    - sudden stabbing chest pain
+    - rapid collapse or fainting
+    - asymmetrical chest movement
+    escalation: Seek emergency care without delay; a collapsed lung requires urgent
+      intervention.
+  J15.9:
+    red_flags:
+    - persistent_high_fever
+    - confusion
+    - lethargy
+    - oxygen_saturation_below_92
+    - severe_dehydration
+    symptoms:
+    - persistent high fever
+    - confusion or lethargy
+    - oxygen saturation below 92%
+    escalation: "Antibiotics may be required urgently\u2014advise immediate clinical\
+      \ assessment."
+  J12.9:
+    red_flags:
+    - rapid_breathing_over_30
+    - difficulty_speaking_full_sentences
+    - cyanosis
+    - severe_fatigue
+    - unresponsive_to_initial_treatment
+    symptoms:
+    - rapid breathing over 30 breaths per minute
+    - difficulty speaking full sentences
+    - lips or face turning blue
+    escalation: Advise emergency evaluation, particularly for high-risk groups such
+      as infants and older adults.
+  J21.9:
+    red_flags:
+    - apnea
+    - pauses_in_breathing
+    - poor_feeding
+    - severe_dehydration
+    - grunting
+    - severe_chest_retractions
+    symptoms:
+    - pauses in breathing (apnea)
+    - poor feeding or dehydration
+    - grunting or severe chest retractions
+    escalation: Infants with these signs need immediate emergency assessment and possible
+      hospitalization.
+comorbidity_effects:
+  hypertension:
+    symptom_modifiers:
+      dyspnea: 1.2
+      chest_pain: 1.4
+      fatigue: 1.15
+      headache: 1.3
+    specific_symptoms:
+    - palpitations
+    - dizziness
+    probability: 0.3
+  heart_failure:
+    symptom_modifiers:
+      dyspnea: 1.6
+      orthopnea: 1.8
+      fatigue: 1.5
+      cough: 1.3
+      wheezing: 1.25
+    specific_symptoms:
+    - leg_swelling
+    - paroxysmal_nocturnal_dyspnea
+    - exercise_intolerance
+    probability: 0.35
+  diabetes:
+    symptom_modifiers:
+      fatigue: 1.3
+      infection_risk: 1.5
+      poor_wound_healing: 1.4
+      weakness: 1.2
+    specific_symptoms:
+    - frequent_urination
+    - increased_thirst
+    - blurred_vision
+    probability: 0.3
+  obesity:
+    symptom_modifiers:
+      shortness_of_breath: 1.5
+      exercise_intolerance: 1.4
+      fatigue: 1.3
+      snoring: 1.6
+      dyspnea: 1.35
+    specific_symptoms:
+    - sleep_disturbance
+    - daytime_sleepiness
+    - reduced_mobility
+    probability: 0.35
+  immunocompromised:
+    symptom_modifiers:
+      fever: 1.4
+      infection_risk: 1.8
+      fatigue: 1.4
+      weight_loss: 1.3
+      cough: 1.25
+    specific_symptoms:
+    - recurrent_infections
+    - prolonged_illness
+    - night_sweats
+    probability: 0.4
+  anxiety:
+    symptom_modifiers:
+      dyspnea: 1.3
+      chest_tightness: 1.4
+      palpitations: 1.5
+      hyperventilation: 1.6
+      dizziness: 1.3
+    specific_symptoms:
+    - sense_of_doom
+    - trembling
+    - sweating
+    probability: 0.35
+  depression:
+    symptom_modifiers:
+      fatigue: 1.5
+      weakness: 1.3
+      pain_sensitivity: 1.2
+      sleep_disturbance: 1.4
+    specific_symptoms:
+    - anhedonia
+    - poor_concentration
+    - appetite_changes
+    probability: 0.3
+  copd:
+    symptom_modifiers:
+      chronic_cough: 1.5
+      sputum_production: 1.6
+      dyspnea: 1.4
+      wheezing: 1.3
+      fatigue: 1.25
+    specific_symptoms:
+    - barrel_chest
+    - pursed_lip_breathing
+    - morning_symptoms
+    probability: 0.35
+  interactions:
+    asthma_copd:
+      conditions:
+      - J45.9
+      - J44.9
+      symptom_modifiers:
+        chronic_cough: 0.9
+        sputum_production: 0.85
+        wheezing: 0.88
+        dyspnea: 0.92
+      note: Asthma-COPD Overlap Syndrome (ACOS) - requires careful phenotyping
+    heart_failure_copd:
+      conditions:
+      - J44.9
+      comorbidity: heart_failure
+      symptom_modifiers:
+        dyspnea: 1.8
+        orthopnea: 1.7
+        peripheral_edema: 1.9
+        cough: 1.5
+      note: Challenging differential - both cause dyspnea and exercise limitation
+    diabetes_infection:
+      conditions:
+      - J18.9
+      - J15.9
+      comorbidity: diabetes
+      symptom_modifiers:
+        fever: 1.3
+        infection_severity: 1.6
+        poor_wound_healing: 1.5
+      note: Increased infection severity and delayed recovery in diabetics
+    obesity_respiratory:
+      conditions:
+      - J45.9
+      - J44.9
+      comorbidity: obesity
+      symptom_modifiers:
+        dyspnea: 1.6
+        exercise_intolerance: 1.7
+        sleep_disturbance: 1.8
+      note: Obesity hypoventilation syndrome risk - consider BiPAP evaluation
+  max_probability: 0.95
+  clinical_notes: 'These modifiers are based on clinical evidence but should be used
+    for
+
+    educational and research purposes only. Real clinical decision-making
+
+    requires comprehensive patient assessment, physical examination,
+
+    and appropriate diagnostic testing.
+
+
+    Comorbidity effects are multiplicative with baseline symptom probabilities
+
+    and are capped at 0.95 to maintain realistic distributions.
+
+
+    Interaction effects supersede individual comorbidity effects when
+
+    multiple conditions are present.
+
+    '
+symptom_causality:
+  causal_edges:
+  - source: airway_inflammation
+    target: wheezing
+    strength: 0.9
+    evidence: 'Clinical guideline: Airway inflammation is the primary mechanism of
+      wheezing'
+  - source: mucus_production
+    target: productive_cough
+    strength: 0.85
+    evidence: 'Pathophysiology: Mucus accumulation triggers cough reflex'
+  - source: airway_obstruction
+    target: shortness_of_breath
+    strength: 0.88
+    evidence: 'Respiratory mechanics: Obstruction reduces airflow capacity'
+  - source: hypoxia
+    target: cyanosis
+    strength: 0.92
+    evidence: 'Clinical sign: Insufficient oxygen causes tissue discoloration'
+  - source: respiratory_distress
+    target: tachypnea
+    strength: 0.87
+    evidence: 'Compensatory mechanism: Body increases breathing rate'
+  - source: chest_tightness
+    target: difficulty_breathing
+    strength: 0.8
+    evidence: 'Clinical correlation: Chest tightness restricts breathing'
+  - source: fever
+    target: fatigue
+    strength: 0.75
+    evidence: 'Systemic response: Fever increases metabolic demand'
+  - source: infection
+    target: fever
+    strength: 0.82
+    evidence: 'Immune response: Infection triggers fever'
+  - source: hypoxia
+    target: confusion
+    strength: 0.78
+    evidence: 'Neurological: Reduced oxygen to brain affects cognition'
+  - source: increased_work_of_breathing
+    target: use_of_accessory_muscles
+    strength: 0.84
+    evidence: 'Biomechanics: Compensatory muscle recruitment'
+  temporal_edges:
+  - earlier: fever
+    later: fatigue
+    typical_delay_hours: 24
+    strength: 0.7
+    evidence: 'Clinical observation: Fatigue follows fever onset'
+  - earlier: infection
+    later: fever
+    typical_delay_hours: 12
+    strength: 0.75
+    evidence: 'Immune timeline: Fever develops after infection'
+  - earlier: cough
+    later: productive_cough
+    typical_delay_hours: 48
+    strength: 0.68
+    evidence: 'Clinical progression: Dry cough becomes productive'
+  - earlier: shortness_of_breath
+    later: severe_distress
+    typical_delay_hours: 6
+    strength: 0.72
+    evidence: 'Clinical deterioration: Symptoms worsen over hours'
+  - earlier: wheezing
+    later: respiratory_distress
+    typical_delay_hours: 4
+    strength: 0.65
+    evidence: 'Clinical observation: Untreated wheezing can worsen'
+  - earlier: chest_pain
+    later: difficulty_breathing
+    typical_delay_hours: 2
+    strength: 0.6
+    evidence: 'Clinical sequence: Pain affects breathing mechanics'
+  edge_types:
+    co_occurrence: 0
+    causal: 1
+    temporal: 2
+  edge_weights:
+    co_occurrence_weight: 0.4
+    causal_weight: 1.0
+    temporal_weight: 0.6
+    reverse_causal_factor: 0.3
+temporal_patterns:
+  J18.9:
+    typical_progression:
+    - symptom: fever
+      onset_hour: 0
+    - symptom: cough
+      onset_hour: 12
+    - symptom: chest_pain
+      onset_hour: 24
+    - symptom: dyspnea
+      onset_hour: 48
+    - symptom: productive_cough
+      onset_hour: 72
+  J45.9:
+    typical_progression:
+    - symptom: wheezing
+      onset_hour: 0
+    - symptom: shortness_of_breath
+      onset_hour: 2
+    - symptom: chest_tightness
+      onset_hour: 4
+    - symptom: cough
+      onset_hour: 6
+  J44.9:
+    typical_progression:
+    - symptom: cough
+      onset_hour: 0
+    - symptom: dyspnea
+      onset_hour: 24
+    - symptom: wheezing
+      onset_hour: 48
+    - symptom: chest_tightness
+      onset_hour: 72
+    - symptom: fatigue
+      onset_hour: 96
+  J20.9:
+    typical_progression:
+    - symptom: cough
+      onset_hour: 0
+    - symptom: sore_throat
+      onset_hour: 12
+    - symptom: fever
+      onset_hour: 24
+    - symptom: productive_cough
+      onset_hour: 48
+    - symptom: chest_discomfort
+      onset_hour: 72
+  J06.9:
+    typical_progression:
+    - symptom: sore_throat
+      onset_hour: 0
+    - symptom: nasal_congestion
+      onset_hour: 12
+    - symptom: cough
+      onset_hour: 24
+    - symptom: fever
+      onset_hour: 36
+    - symptom: fatigue
+      onset_hour: 48
+  J93.0:
+    typical_progression:
+    - symptom: sudden_chest_pain
+      onset_hour: 0
+    - symptom: shortness_of_breath
+      onset_hour: 1
+    - symptom: rapid_breathing
+      onset_hour: 2
+    - symptom: chest_tightness
+      onset_hour: 4
+  J81.0:
+    typical_progression:
+    - symptom: dyspnea
+      onset_hour: 0
+    - symptom: orthopnea
+      onset_hour: 6
+    - symptom: wheezing
+      onset_hour: 12
+    - symptom: cough
+      onset_hour: 18
+    - symptom: pink_frothy_sputum
+      onset_hour: 24
+  J15.9:
+    typical_progression:
+    - symptom: fever
+      onset_hour: 0
+    - symptom: chills
+      onset_hour: 6
+    - symptom: cough
+      onset_hour: 12
+    - symptom: productive_cough
+      onset_hour: 36
+    - symptom: chest_pain
+      onset_hour: 48
+    - symptom: dyspnea
+      onset_hour: 72
+  J12.9:
+    typical_progression:
+    - symptom: fever
+      onset_hour: 0
+    - symptom: dry_cough
+      onset_hour: 24
+    - symptom: fatigue
+      onset_hour: 36
+    - symptom: dyspnea
+      onset_hour: 72
+    - symptom: chest_discomfort
+      onset_hour: 96
+  J21.9:
+    typical_progression:
+    - symptom: nasal_congestion
+      onset_hour: 0
+    - symptom: cough
+      onset_hour: 12
+    - symptom: wheezing
+      onset_hour: 24
+    - symptom: rapid_breathing
+      onset_hour: 36
+    - symptom: difficulty_feeding
+      onset_hour: 48

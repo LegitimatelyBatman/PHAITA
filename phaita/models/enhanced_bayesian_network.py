@@ -143,8 +143,14 @@ class EnhancedBayesianNetwork:
         }
     
     def _load_comorbidity_effects(self):
-        """Load comorbidity effects from YAML configuration file."""
-        config_path = Path(__file__).parent.parent.parent / "config" / "comorbidity_effects.yaml"
+        """Load comorbidity effects from YAML configuration file.
+        
+        Tries medical_knowledge.yaml first (new structure),
+        falls back to comorbidity_effects.yaml (legacy).
+        """
+        project_root = Path(__file__).parent.parent.parent
+        medical_knowledge_path = project_root / "config" / "medical_knowledge.yaml"
+        legacy_path = project_root / "config" / "comorbidity_effects.yaml"
         
         # Default fallback modifiers if config file is not found
         default_modifiers = {
@@ -153,14 +159,27 @@ class EnhancedBayesianNetwork:
             "obesity": {"shortness_of_breath": 1.5, "exercise_intolerance": 1.3}
         }
         
+        config_data = None
+        
         try:
-            if config_path.exists():
-                with open(config_path, 'r') as f:
+            # Try new medical_knowledge.yaml first
+            if medical_knowledge_path.exists():
+                with open(medical_knowledge_path, 'r') as f:
+                    medical_config = yaml.safe_load(f)
+                    if 'comorbidity_effects' in medical_config:
+                        config_data = medical_config['comorbidity_effects']
+            
+            # Fall back to legacy file
+            if config_data is None and legacy_path.exists():
+                with open(legacy_path, 'r') as f:
                     config_data = yaml.safe_load(f)
-                    
+            
+            if config_data:
                 # Extract comorbidity modifiers
                 self.comorbidity_modifiers = {}
                 for comorbidity, data in config_data.items():
+                    if comorbidity == 'interactions' or comorbidity == 'max_probability':
+                        continue  # Skip metadata entries
                     if isinstance(data, dict) and 'symptom_modifiers' in data:
                         self.comorbidity_modifiers[comorbidity] = {
                             'symptom_modifiers': data['symptom_modifiers'],
